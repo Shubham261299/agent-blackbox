@@ -65,5 +65,14 @@ Fallback if (2) fails: deterministic-only evals; local judge becomes a separate 
 - **Redaction limits**: key-based (known field names in JSON, including JSON nested inside JSON strings) plus patterns (emails, card-like numbers, local user-home paths). Free-text PII such as an address in prose is not caught. Local home paths are scrubbed because stack traces would otherwise leak the Windows username into spans.
 - **Ops lesson**: never stop processes by port number; record the PID you started. A port-based kill matched 3 PIDs, and Docker Desktop restarted shortly afterwards (causal link unproven). The Jaeger container does not survive a Docker restart (no restart policy yet).
 
+## Day 2 findings
+- **Observer effect again, in the failure path**: recording an exception formats a stack trace inside the span; a failing tool call read 31 ms against ~0.16 ms of real work. Expected tool failures now record a cheap event (type + message, no stack trace) and `start_span` takes the end time before recording an exception. Both have mutation-checked tests. Matters for Day 4: injected failures must not be distorted by the tracer.
+- **JS cannot hold epoch nanoseconds exactly** (~1.8e18 vs 9e15 safe integer): the API sends `start_offset_ms` computed server-side from integers.
+- **Chart colours validated, not guessed**: model calls violet, tool calls aqua, agent run neutral, failures use the status red with a ✕ (never colour alone). Checked with the dataviz validator against the app's own surfaces in both themes; all checks pass. Aqua is just under 3:1 on the light surface (2.72), so every bar has a visible text label in its row plus a table view.
+- **Fonts**: system font stacks only (no web fonts), so the app works offline and nothing is fetched from a third party.
+- **UI state bug caught by looking at a screenshot**: a keyed spans query briefly rendered "No spans recorded" for one frame while loading. Fixed by mounting the trace section only once the run has finished; regression test added.
+- **Verification method**: headless Edge screenshots (no extra install). Iframes under a `file://` parent with a virtual clock load unreliably and gave false "loading" frames; narrow layouts are checked by rendering the real page with a device scale factor instead.
+- Ops: dev servers were started and stopped by recorded PID (killing the process tree); ports 8000/5173 are free when not in use.
+
 ## Environment
 Venv `.venv` (Python 3.12.14 via uv). Installed: opentelemetry-sdk/exporter-otlp 1.45.1, deepeval 4.2.8, fastapi 0.143.0, pytest 9.1.1, ollama 0.6.3. Ollama models present: qwen2.5:7b, llama3.1:8b, llama3.2:3b, qwen2.5:14b (too heavy with Docker on 16 GB). Jaeger container name `jaeger`, ports 16686/4317/4318.

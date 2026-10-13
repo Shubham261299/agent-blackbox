@@ -22,12 +22,16 @@ Rough target, ordered by what the audience sees first. A day is done only when i
 - **Done when** one run shows a correct nested trace in Jaeger and the same spans in SQLite. -> **Met** (verified live: 6/6 spans in both, parent links and error statuses match).
 - Day 0 carry-over resolved: `qwen2.5:7b` completed the full lookup -> policy check -> refund -> answer sequence via native Ollama tool calling (28.7 s total on CPU; first model call 12.3 s incl. model load, later calls 2.8–3.9 s; real token counts recorded). One run only — not yet a reliability measurement; `llama3.1:8b` not tried.
 
-## Day 2 — Dashboard core
-- [ ] Vite + React + TS, typed API client
-- [ ] Run list (status, duration, scores)
-- [ ] Trace waterfall + span tree
-- [ ] Span inspector (args, output summary, error, redaction visible)
-- **Done when** you can click through a real run and see timing and errors.
+## Day 2 — Dashboard core — DONE (not committed)
+- [x] Vite + React + TS (exact-pinned deps), typed API client behind a `DataSource` interface (live API now; prebaked demo data on Day 6)
+- [x] Run list: status pills (icon + label), summary strip, status filter, start-run panel (scripted scenario or local Ollama). Scores column deliberately omitted until Day 3 produces real scores.
+- [x] Trace waterfall (indented span tree + shared time axis), table twin of the waterfall, legend, hover/focus tooltip, arrow-key navigation
+- [x] Span inspector: facts, tool args/output, prompt transcript, events/exceptions, all attributes; redacted values shown as chips with a count; opens on the failed span by default
+- [x] Light/dark/system theme, phone-width layout, API-down state with start command, running state, empty and not-found states
+- [x] Backend additions: `GET /scenarios`, `start_offset_ms` on spans (exact integer math; epoch ns exceed JS safe integers)
+- [x] Tests: 44 frontend (vitest + Testing Library) and 39 backend; frontend suite run 6x with no flakes
+- **Done when** you can click through a real run and see timing and errors. -> **Met**, checked in rendered screenshots (Edge headless) at desktop and narrow width, light and dark, on a real `qwen2.5:7b` run, a failed-tool run and a failed run.
+- Not done: no real-browser interaction test (clicks/keys are covered by Testing Library, not a real browser); Day 6 owns the static demo build.
 
 ## Day 3 — Evaluation
 - [ ] Golden set of 20–30 tasks: normal, ambiguous, wrong-tool, tool-failure, constraint-violation
