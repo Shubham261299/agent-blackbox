@@ -17,6 +17,17 @@ def test_health(client):
     assert client.get("/health").json() == {"status": "ok"}
 
 
+def test_scenarios_listed_and_every_one_is_runnable(client):
+    from blackbox.llm.scripted import SCENARIOS
+
+    scenarios = client.get("/scenarios").json()
+    assert {s["name"] for s in scenarios} == set(SCENARIOS)  # info and scripts cannot drift apart
+    for s in scenarios:
+        assert s["description"] and s["example_task"]
+        run_id = client.post("/runs", json={"task": s["example_task"], "scenario": s["name"]}).json()["run_id"]
+        assert client.get(f"/runs/{run_id}").json()["status"] == "ok"
+
+
 def test_start_run_then_read_run_and_spans(client):
     started = client.post("/runs", json={"task": "Refund order 42, damaged."})
     assert started.status_code == 202

@@ -25,12 +25,16 @@ def start_span(tracer: Tracer, name: str, attributes: Mapping[str, Any]) -> Iter
     """Start a span, make it current, and end it with a high-res timestamp.
     An exception escaping the block is recorded on the span (status ERROR) and re-raised."""
     span = tracer.start_span(name, attributes=attributes, start_time=now_ns())
+    end_ns: int | None = None
     try:
         with trace.use_span(span, end_on_exit=False, record_exception=False, set_status_on_exception=False):
             yield span
     except Exception as exc:
-        span.record_exception(exc, timestamp=now_ns())
+        # Take the end time first: formatting the stack trace can cost tens of milliseconds and that
+        # is our own overhead, not time the work took.
+        end_ns = now_ns()
+        span.record_exception(exc, timestamp=end_ns)
         span.set_status(Status(StatusCode.ERROR, f"{type(exc).__name__}: {exc}"))
         raise
     finally:
-        span.end(end_time=now_ns())
+        span.end(end_time=end_ns if end_ns is not None else now_ns())

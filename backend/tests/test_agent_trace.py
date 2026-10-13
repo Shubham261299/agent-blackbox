@@ -32,6 +32,17 @@ def test_happy_path_span_tree(run_agent, store):
     assert all(c.start_time_ns >= root.start_time_ns and c.end_time_ns <= root.end_time_ns for c in children)
 
 
+def test_span_offsets_are_relative_to_run_start_and_nested_in_the_root(run_agent, store):
+    run_agent(scripted_model("refund_happy_path"))
+    spans = store.get_spans("run-test")
+    root, children = spans[0], spans[1:]
+    assert root.start_offset_ms == 0
+    offsets = [c.start_offset_ms for c in children]
+    assert offsets == sorted(offsets) and offsets[0] >= 0
+    eps = 1e-6
+    assert all(c.start_offset_ms + c.duration_ms <= root.duration_ms + eps for c in children)
+
+
 def test_span_attributes(run_agent, store):
     run_agent(scripted_model("refund_happy_path"))
     s = spans_by_name(store)

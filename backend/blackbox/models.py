@@ -14,6 +14,12 @@ class RunRequest(BaseModel):
     scenario: str | None = None
 
 
+class ScenarioInfo(BaseModel):
+    name: str
+    description: str
+    example_task: str
+
+
 class RunRecord(BaseModel):
     """Application-level run metadata. `status` says whether the agent run completed,
     not whether the task was done correctly -- that is the evaluation layer's job."""
@@ -38,6 +44,9 @@ class SpanRecord(BaseModel):
     span_type: SpanType
     start_time_ns: int
     end_time_ns: int
+    # Offset from the earliest span of the run, computed with exact integer math server-side:
+    # epoch nanoseconds (~1.8e18) exceed JavaScript's exact-integer range (~9e15).
+    start_offset_ms: float = 0.0
     duration_ms: float
     status: SpanStatus
     status_message: str | None = None

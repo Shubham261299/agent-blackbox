@@ -139,7 +139,13 @@ class AgentRunner:
 
 
 def _record_tool_failure(span: Span, exc: Exception) -> None:
-    span.record_exception(exc, timestamp=now_ns())
+    # An expected domain failure: type and message are the useful part. Skipping the stack trace keeps this
+    # cheap -- formatting one inside the span made a failing tool look ~100x slower than it was.
+    span.add_event(
+        "exception",
+        {"exception.type": f"{type(exc).__module__}.{type(exc).__qualname__}", "exception.message": str(exc)},
+        timestamp=now_ns(),
+    )
     span.set_status(Status(StatusCode.ERROR, str(exc)))
 
 

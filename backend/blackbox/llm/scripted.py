@@ -53,6 +53,23 @@ SCENARIOS: dict[str, Callable[[], list[ModelResponse]]] = {
 }
 DEFAULT_SCENARIO = "refund_happy_path"
 
+# What the UI shows for each scenario: a description and a task text that actually matches the script
+# (the scripted model ignores the task, so the example keeps the recorded run honest).
+SCENARIO_INFO: dict[str, tuple[str, str]] = {
+    "refund_happy_path": (
+        "Refund an eligible order: look it up, check policy, issue the refund.",
+        "Order 42 arrived damaged, please refund it.",
+    ),
+    "refund_denied_over_limit": (
+        "Refund request over the $100 limit: the agent checks policy and declines.",
+        "Order 43 is damaged, I want my $180 back.",
+    ),
+    "unknown_order": (
+        "Order id does not exist: the lookup fails and the agent recovers with an answer.",
+        "Where is order 999?",
+    ),
+}
+
 
 def scripted_model(scenario: str | None) -> ScriptedModel:
     key = scenario or DEFAULT_SCENARIO

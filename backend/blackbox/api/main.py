@@ -14,8 +14,8 @@ from blackbox.agent.tools import OrderDesk
 from blackbox.config import Settings, get_settings
 from blackbox.llm.base import ModelClient
 from blackbox.llm.ollama_client import OllamaClient
-from blackbox.llm.scripted import scripted_model
-from blackbox.models import RunRecord, RunRequest, SpanRecord
+from blackbox.llm.scripted import SCENARIO_INFO, scripted_model
+from blackbox.models import RunRecord, RunRequest, ScenarioInfo, SpanRecord
 from blackbox.store.db import Store
 from blackbox.telemetry.redaction import scrub_text
 from blackbox.telemetry.setup import Telemetry
@@ -76,6 +76,10 @@ def create_app(
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/scenarios", response_model=list[ScenarioInfo])
+    def list_scenarios() -> list[ScenarioInfo]:
+        return [ScenarioInfo(name=n, description=d, example_task=t) for n, (d, t) in SCENARIO_INFO.items()]
 
     @app.post("/runs", response_model=RunRecord, status_code=202)
     def start_run(request: RunRequest, background: BackgroundTasks) -> RunRecord:

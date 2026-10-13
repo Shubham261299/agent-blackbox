@@ -100,7 +100,13 @@ class Store:
             rows = self._db.execute(
                 "SELECT * FROM spans WHERE run_id=? ORDER BY start_time_ns, parent_span_id IS NOT NULL, rowid", (run_id,)
             ).fetchall()
+        origin = min((r["start_time_ns"] for r in rows), default=0)
         return [
-            SpanRecord(**{**dict(r), "attributes": json.loads(r["attributes"]), "events": json.loads(r["events"])})
+            SpanRecord(**{
+                **dict(r),
+                "attributes": json.loads(r["attributes"]),
+                "events": json.loads(r["events"]),
+                "start_offset_ms": (r["start_time_ns"] - origin) / 1e6,
+            })
             for r in rows
         ]
