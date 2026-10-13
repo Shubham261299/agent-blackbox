@@ -1,0 +1,23 @@
+[project]
+name = "agent-blackbox"
+version = "0.1.0"
+description = "Local-first observability and evaluation workbench for AI agents"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "opentelemetry-sdk==1.45.1",
+    "opentelemetry-exporter-otlp==1.45.1",
+    "deepeval==4.2.8",
+    "fastapi==0.143.0",
+    "uvicorn==0.54.0",
+    "ollama==0.6.3",
+    "pytest==9.1.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["backend"]
+testpaths = ["backend/tests"]
+# DeepEval auto-loads a pytest plugin that can emit anonymous telemetry; we call its metrics directly instead.
+addopts = "-p no:deepeval"
+markers = [
+    "integration: needs local Jaeger on :16686/:4318 (docker compose up -d jaeger)",
+]

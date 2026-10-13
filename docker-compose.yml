@@ -1,0 +1,10 @@
+services:
+  jaeger:
+    # Jaeger v2: query API is /api/v3 (OTLP-shaped JSON); old /api/traces is gone.
+    # Storage is in-memory: traces are lost on restart (the app keeps its own span copy in SQLite).
+    image: jaegertracing/jaeger:2.22.0
+    container_name: jaeger
+    ports:
+      - "16686:16686"   # UI + query API
+      - "4317:4317"     # OTLP gRPC
+      - "4318:4318"     # OTLP HTTP

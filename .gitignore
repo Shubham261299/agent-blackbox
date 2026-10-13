@@ -1,0 +1,20 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# local data: run database, deepeval caches
+data/
+*.db
+*.sqlite3
+.deepeval/
+.deepeval_telemetry.txt
+
+# env / secrets
+.env
+.env.*
+
+# frontend (Day 2)
+node_modules/
+dist/
