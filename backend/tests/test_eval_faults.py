@@ -8,7 +8,7 @@ from blackbox.evals.scripts import FAULTS
 
 DATASET = load_dataset()
 JUDGED = {"task_completion", "policy_compliance", "tool_correctness", "argument_correctness",
-          "step_efficiency", "trace_completeness"}
+          "step_efficiency", "trace_completeness", "tool_output_contract"}
 
 
 @pytest.mark.parametrize("fault", FAULTS, ids=[f.name for f in FAULTS])

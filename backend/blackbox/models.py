@@ -37,7 +37,7 @@ class EvalCaseResult(BaseModel):
     checks: list[CheckResult] = Field(default_factory=list)
 
 
-EvalKind = Literal["benchmark", "reference", "validation"]
+EvalKind = Literal["benchmark", "reference", "validation", "faultlab"]
 
 
 class EvalRunSummary(BaseModel):
@@ -74,6 +74,27 @@ class EvalReport(EvalRunSummary):
     categories: list[CategorySummary] = Field(default_factory=list)
 
 
+class Suspect(BaseModel):
+    """A span trace analysis points at, ranked. Computed from the trace and the checks, never from the injected fault."""
+
+    span_id: str
+    span_name: str
+    tier: int  # 0 contract violation, 1 failed gating check, 2 failed reported check, 3 error status
+    source: str
+    reason: str
+
+
+class RunFault(BaseModel):
+    """Ground truth for a lab run: what was planted and where. Stored outside the trace on purpose."""
+
+    kind: str
+    tool: str | None = None
+    occurrence: int = 1
+    description: str
+    origin_span_id: str | None = None
+    fired: bool = False
+
+
 class RunEvaluation(BaseModel):
     """Checks for one run. `case_id`/`eval_id` are set when the run belonged to a stored evaluation;
     otherwise only the checks that need no expectations are computed on the fly."""
@@ -83,10 +104,11 @@ class RunEvaluation(BaseModel):
     case_id: str | None = None
     stored: bool
     checks: list[CheckResult]
+    suspects: list[Suspect] = Field(default_factory=list)
 
 
 class StartEvalRequest(BaseModel):
-    mode: Literal["reference", "faults"] = "reference"
+    mode: Literal["reference", "faults", "faultlab"] = "reference"
 
 
 class ScenarioInfo(BaseModel):

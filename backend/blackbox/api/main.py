@@ -9,6 +9,7 @@ from blackbox.agent.service import RunService
 from blackbox.config import Settings, get_settings
 from blackbox.evals.cases import load_dataset
 from blackbox.evals.checks import evaluate_generic
+from blackbox.evals.localize import locate
 from blackbox.evals.runner import execute_evaluation, prepare_evaluation
 from blackbox.evals.trajectory import build_trajectory
 from blackbox.llm.base import ModelClient
@@ -18,6 +19,7 @@ from blackbox.models import (
     EvalReport,
     EvalRunSummary,
     RunEvaluation,
+    RunFault,
     RunRecord,
     RunRequest,
     ScenarioInfo,
@@ -99,14 +101,23 @@ def create_app(
         if run is None:
             raise HTTPException(status_code=404, detail="run not found")
         found = store.find_eval_case_for_run(run_id)
+        if run.status == "running" and not found:
+            raise HTTPException(status_code=409, detail="run is still running")
+        traj = build_trajectory(run, store.get_spans(run_id))
         if found:
             eval_id, case_id = found
-            return RunEvaluation(run_id=run_id, eval_id=eval_id, case_id=case_id, stored=True,
-                                 checks=store.get_case_checks(eval_id, case_id))
-        if run.status == "running":
-            raise HTTPException(status_code=409, detail="run is still running")
-        checks = evaluate_generic(build_trajectory(run, store.get_spans(run_id)))
-        return RunEvaluation(run_id=run_id, stored=False, checks=checks)
+            checks = store.get_case_checks(eval_id, case_id)
+            return RunEvaluation(run_id=run_id, eval_id=eval_id, case_id=case_id, stored=True, checks=checks,
+                                 suspects=locate(traj, checks))
+        checks = evaluate_generic(traj)
+        return RunEvaluation(run_id=run_id, stored=False, checks=checks, suspects=locate(traj, checks))
+
+    @app.get("/runs/{run_id}/faults", response_model=list[RunFault])
+    def get_run_faults(run_id: str) -> list[RunFault]:
+        """Ground truth for failure-lab runs (empty for every other run). Kept out of the trace on purpose."""
+        if store.get_run(run_id) is None:
+            raise HTTPException(status_code=404, detail="run not found")
+        return store.get_run_faults(run_id)
 
     # ---- evaluations ---------------------------------------------------------------
     @app.get("/evals", response_model=list[EvalRunSummary])

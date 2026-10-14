@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from blackbox.evals.cases import EvalCase, load_dataset
+from blackbox.faults.injector import FaultSpec
 from blackbox.llm.base import ModelResponse, ToolRequest
 from blackbox.llm.scripted import ScriptedModel
 from blackbox.store.db import Store
@@ -40,6 +41,7 @@ class Fault:
     expect_fail: frozenset[str]  # exactly these checks must fail; every other check must pass
     max_steps: int | None = None
     plant: Plant | None = None
+    inject: tuple[FaultSpec, ...] = ()  # infrastructure faults planted through the injector
 
 
 def _drop_second_model_span(store: Store, run_id: str) -> None:
@@ -100,6 +102,11 @@ FAULTS: list[Fault] = [
     Fault(
         "missing_model_span", "A correct run whose second model span is missing from the stored trace.", "N1",
         lambda c: reference_script(c), frozenset({"trace_completeness"}), plant=_drop_second_model_span,
+    ),
+    Fault(
+        "garbled_tool_output", "The order lookup returns an error page as if it were an order. Nothing raises.", "N1",
+        lambda c: reference_script(c), frozenset({"tool_output_contract"}),
+        inject=(FaultSpec("malformed_output", tool="lookup_order", params={"mode": "html"}),),
     ),
     Fault(
         "step_limit", "Keeps looking the order up until the step limit stops it.", "N7",

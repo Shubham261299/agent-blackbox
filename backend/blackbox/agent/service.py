@@ -8,8 +8,9 @@ from datetime import UTC, datetime
 from blackbox.agent.loop import AgentResult, AgentRunner
 from blackbox.agent.tools import OrderDesk
 from blackbox.config import Settings
+from blackbox.faults.injector import FaultInjector
 from blackbox.llm.base import ModelClient
-from blackbox.models import RunRecord
+from blackbox.models import RunFault, RunRecord
 from blackbox.store.db import Store
 from blackbox.telemetry.redaction import scrub_text
 from blackbox.telemetry.setup import Telemetry
@@ -33,14 +34,17 @@ class RunService:
         self.store.create_run(run)
         return run
 
-    def execute(self, run_id: str, model: ModelClient, task: str, max_steps: int | None = None) -> None:
+    def execute(self, run_id: str, model: ModelClient, task: str, max_steps: int | None = None,
+                injector: FaultInjector | None = None) -> None:
         started = time.perf_counter()
         lock = self._ollama_lock if model.provider == "ollama" else None
         if lock:
             lock.acquire()
         try:
-            runner = AgentRunner(model, OrderDesk().registry(), self.telemetry.tracer(),
-                                 max_steps or self.settings.max_agent_steps)
+            tools = OrderDesk().registry()
+            if injector:
+                tools, model = injector.wrap_tools(tools), injector.wrap_model(model)
+            runner = AgentRunner(model, tools, self.telemetry.tracer(), max_steps or self.settings.max_agent_steps)
             result = runner.run(run_id, task)
         except Exception as exc:  # defensive: AgentRunner.run already converts agent errors into a result
             result = AgentResult("error", None, f"{type(exc).__name__}: {exc}", None, 0)
@@ -49,6 +53,11 @@ class RunService:
                 lock.release()
         duration_ms = (time.perf_counter() - started) * 1000  # agent time only, not export time
         self.telemetry.flush_store()
+        if injector:
+            self.store.save_run_faults(run_id, [
+                RunFault(kind=f.spec.kind, tool=f.spec.tool, occurrence=f.spec.occurrence, description=f.spec.describe(),
+                         origin_span_id=f.origin_span_id, fired=f.fired)
+                for f in injector.faults])
         self.store.finish_run(
             run_id,
             status=result.status,
@@ -58,9 +67,10 @@ class RunService:
             error=scrub_text(result.error) if result.error else None,
         )
 
-    def run_sync(self, model: ModelClient, task: str, max_steps: int | None = None) -> RunRecord:
+    def run_sync(self, model: ModelClient, task: str, max_steps: int | None = None,
+                 injector: FaultInjector | None = None) -> RunRecord:
         run = self.create_run(model, task)
-        self.execute(run.run_id, model, task, max_steps)
+        self.execute(run.run_id, model, task, max_steps, injector)
         finished = self.store.get_run(run.run_id)
         assert finished is not None
         return finished

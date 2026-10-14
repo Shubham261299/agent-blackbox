@@ -344,8 +344,9 @@ def test_latency_is_informational(real_run):
 def test_entry_points_return_the_expected_metrics(real_run):
     t = build_trajectory(*real_run)
     generic = [r.metric for r in evaluate_generic(t)]
-    assert generic == ["policy_compliance", "trace_completeness", "latency"]
+    assert generic == ["policy_compliance", "trace_completeness", "tool_output_contract", "latency"]
     full = evaluate_case(case(**FULL, **REFUND_CASE), t)
     assert [r.metric for r in full] == ["task_completion", "policy_compliance", "tool_correctness",
-                                        "argument_correctness", "step_efficiency", "trace_completeness", "latency"]
+                                        "argument_correctness", "step_efficiency", "trace_completeness",
+                                        "tool_output_contract", "latency"]
     assert {r.metric for r in full if r.gating} == {"task_completion", "policy_compliance"}

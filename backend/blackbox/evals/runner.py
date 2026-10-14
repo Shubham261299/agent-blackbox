@@ -4,6 +4,8 @@ Modes:
   ollama     the local model on every case             -> kind "benchmark"  (slow, real numbers)
   reference  a scripted correct run of every case      -> kind "reference"  (instant, proves the pipeline)
   faults     each planted fault through its base case  -> kind "validation" (instant, proves the checks)
+  faultlab         infrastructure faults planted in one run, scripted model -> kind "faultlab" (instant)
+  faultlab-ollama  the same, with the real model                          -> kind "faultlab" (a few minutes)
 """
 import uuid
 from collections.abc import Callable
@@ -13,15 +15,21 @@ from typing import Literal
 from blackbox.agent.service import RunService
 from blackbox.evals.cases import Dataset, EvalCase
 from blackbox.evals.checks import case_passed, evaluate_case
+from blackbox.evals.faultlab import run_fault_lab
 from blackbox.evals.scripts import FAULTS, Fault, Plant, reference_model
 from blackbox.evals.trajectory import build_trajectory
+from blackbox.faults.injector import FaultInjector
 from blackbox.llm.base import ModelClient
 from blackbox.llm.ollama_client import OllamaClient
 from blackbox.llm.scripted import ScriptedModel
 from blackbox.models import EvalCaseResult, EvalKind, EvalRunSummary
 
-Mode = Literal["ollama", "reference", "faults"]
-KIND: dict[str, EvalKind] = {"ollama": "benchmark", "reference": "reference", "faults": "validation"}
+Mode = Literal["ollama", "reference", "faults", "faultlab", "faultlab-ollama"]
+KIND: dict[str, EvalKind] = {
+    "ollama": "benchmark", "reference": "reference", "faults": "validation",
+    "faultlab": "faultlab", "faultlab-ollama": "faultlab",
+}
+REAL_MODEL_MODES = ("ollama", "faultlab-ollama")
 SEED = 0
 Progress = Callable[[EvalCaseResult], None]
 
@@ -31,8 +39,9 @@ def _now() -> str:
 
 
 def run_case(service: RunService, model: ModelClient, case: EvalCase, *, max_steps: int | None = None,
-             plant: Plant | None = None, note: dict | None = None, case_id: str | None = None) -> EvalCaseResult:
-    run = service.run_sync(model, case.task, max_steps)
+             plant: Plant | None = None, note: dict | None = None, case_id: str | None = None,
+             injector: FaultInjector | None = None) -> EvalCaseResult:
+    run = service.run_sync(model, case.task, max_steps, injector)
     if plant:
         plant(service.store, run.run_id)
     traj = build_trajectory(run, service.store.get_spans(run.run_id))
@@ -45,13 +54,14 @@ def run_case(service: RunService, model: ModelClient, case: EvalCase, *, max_ste
 
 def _model_label(service: RunService, mode: Mode) -> str:
     return {"ollama": f"ollama:{service.settings.ollama_model}", "reference": "scripted:reference",
-            "faults": "scripted:faults"}[mode]
+            "faults": "scripted:faults", "faultlab": "scripted:faultlab",
+            "faultlab-ollama": f"ollama:{service.settings.ollama_model}"}[mode]
 
 
 def prepare_evaluation(service: RunService, dataset: Dataset, mode: Mode) -> EvalRunSummary:
     summary = EvalRunSummary(
         eval_id=f"eval-{uuid.uuid4().hex[:8]}", kind=KIND[mode], model=_model_label(service, mode),
-        dataset_version=dataset.version, dataset_hash=dataset.content_hash, seed=SEED if mode == "ollama" else None,
+        dataset_version=dataset.version, dataset_hash=dataset.content_hash, seed=SEED if mode in REAL_MODEL_MODES else None,
         started_at=_now(), status="running",
     )
     service.store.create_eval_run(summary)
@@ -61,7 +71,9 @@ def prepare_evaluation(service: RunService, dataset: Dataset, mode: Mode) -> Eva
 def _fault_result(service: RunService, dataset: Dataset, fault: Fault) -> EvalCaseResult:
     base = dataset.case(fault.base_case)
     model = ScriptedModel(fault.script(base), name=fault.name)
-    result = run_case(service, model, base, max_steps=fault.max_steps, plant=fault.plant, case_id=fault.name)
+    injector = FaultInjector(list(fault.inject)) if fault.inject else None
+    result = run_case(service, model, base, max_steps=fault.max_steps, plant=fault.plant, case_id=fault.name,
+                      injector=injector)
     failed = frozenset(c.metric for c in result.checks if c.passed is False)
     note = {"fault": fault.name, "description": fault.description, "base_case": fault.base_case,
             "expected_fail": sorted(fault.expect_fail), "actual_fail": sorted(failed), "matched": failed == fault.expect_fail}
@@ -73,8 +85,16 @@ def execute_evaluation(service: RunService, dataset: Dataset, mode: Mode, eval_i
                        case_ids: list[str] | None = None, progress: Progress | None = None) -> None:
     store = service.store
     try:
+        def real_model() -> ModelClient:
+            return OllamaClient(service.settings.ollama_host, service.settings.ollama_model,
+                                service.settings.ollama_timeout_s, seed=SEED)
+
         if mode == "faults":
             results = (_fault_result(service, dataset, f) for f in FAULTS)
+        elif mode in ("faultlab", "faultlab-ollama"):
+            reference = dataset.case("N1")
+            results = run_fault_lab(service, dataset,
+                                    real_model if mode == "faultlab-ollama" else lambda: reference_model(reference))
         else:
             wanted = [c for c in dataset.cases if not case_ids or c.id in case_ids]
             model_for: Callable[[EvalCase], ModelClient] = (

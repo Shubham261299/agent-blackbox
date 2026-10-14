@@ -10,6 +10,7 @@ from blackbox.models import (
     EvalReport,
     EvalRunSummary,
     MetricSummary,
+    RunFault,
     RunRecord,
     SpanRecord,
 )
@@ -66,6 +67,17 @@ CREATE TABLE IF NOT EXISTS eval_cases (
     PRIMARY KEY (eval_id, case_id)
 );
 CREATE INDEX IF NOT EXISTS idx_eval_cases_run ON eval_cases(run_id);
+CREATE TABLE IF NOT EXISTS run_faults (
+    run_id         TEXT NOT NULL,
+    idx            INTEGER NOT NULL,
+    kind           TEXT NOT NULL,
+    tool           TEXT,
+    occurrence     INTEGER NOT NULL,
+    description    TEXT NOT NULL,
+    origin_span_id TEXT,
+    fired          INTEGER NOT NULL,
+    PRIMARY KEY (run_id, idx)
+);
 CREATE TABLE IF NOT EXISTS eval_results (
     eval_id  TEXT NOT NULL,
     case_id  TEXT NOT NULL,
@@ -155,6 +167,23 @@ class Store:
             })
             for r in rows
         ]
+
+    # ---- faults planted by the failure lab (ground truth, kept out of the trace) -----
+    def save_run_faults(self, run_id: str, faults: list[RunFault]) -> None:
+        with self._lock:
+            self._db.executemany(
+                "INSERT OR REPLACE INTO run_faults (run_id, idx, kind, tool, occurrence, description, origin_span_id, fired)"
+                " VALUES (?,?,?,?,?,?,?,?)",
+                [(run_id, i, f.kind, f.tool, f.occurrence, f.description, f.origin_span_id, int(f.fired))
+                 for i, f in enumerate(faults)],
+            )
+            self._db.commit()
+
+    def get_run_faults(self, run_id: str) -> list[RunFault]:
+        with self._lock:
+            rows = self._db.execute("SELECT * FROM run_faults WHERE run_id=? ORDER BY idx", (run_id,)).fetchall()
+        return [RunFault(kind=r["kind"], tool=r["tool"], occurrence=r["occurrence"], description=r["description"],
+                         origin_span_id=r["origin_span_id"], fired=bool(r["fired"])) for r in rows]
 
     # ---- test harness only ---------------------------------------------------------
     def delete_span(self, span_id: str) -> None:
@@ -246,7 +275,7 @@ class Store:
         ]
 
         order = ["task_completion", "policy_compliance", "tool_correctness", "argument_correctness",
-                 "step_efficiency", "trace_completeness", "latency"]
+                 "step_efficiency", "trace_completeness", "tool_output_contract", "latency"]
         grouped: dict[str, list[CheckResult]] = {}
         for case in case_results:
             for check in case.checks:

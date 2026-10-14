@@ -39,7 +39,7 @@ def test_case_filter_and_run_links(service, store):
 def test_validation_batch_records_what_each_fault_should_trip(service, store):
     eval_id = run_evaluation(service, DATASET, "faults")
     report = store.get_eval_report(eval_id)
-    assert report.kind == "validation" and (report.n_cases, report.n_passed) == (10, 10)
+    assert report.kind == "validation" and (report.n_cases, report.n_passed) == (11, 11)
     skip = next(c for c in report.cases if c.case_id == "skips_policy_check")
     assert skip.note["expected_fail"] == ["policy_compliance", "tool_correctness"] and skip.note["matched"]
 
@@ -72,7 +72,7 @@ def test_start_reference_eval_over_the_api(client):
 def test_faults_mode_over_the_api_and_validation_of_the_request(client):
     eval_id = client.post("/evals", json={"mode": "faults"}).json()["eval_id"]
     report = client.get(f"/evals/{eval_id}").json()
-    assert report["kind"] == "validation" and report["n_passed"] == 10
+    assert report["kind"] == "validation" and report["n_passed"] == 11
     assert client.post("/evals", json={"mode": "ollama"}).status_code == 422  # real runs belong to the CLI
     assert client.get("/evals/nope").status_code == 404
 
@@ -83,14 +83,14 @@ def test_run_evaluation_returns_stored_checks_for_a_case_run(client):
     case = next(c for c in report["cases"] if c["case_id"] == "N1")
     body = client.get(f"/runs/{case['run_id']}/evaluation").json()
     assert body["stored"] is True and body["case_id"] == "N1" and body["eval_id"] == eval_id
-    assert len(body["checks"]) == 7
+    assert len(body["checks"]) == 8
 
 
 def test_any_run_gets_the_expectation_free_checks_on_the_fly(client):
     run_id = client.post("/runs", json={"task": "Refund order 42"}).json()["run_id"]
     body = client.get(f"/runs/{run_id}/evaluation").json()
     assert body["stored"] is False and body["case_id"] is None
-    assert [c["metric"] for c in body["checks"]] == ["policy_compliance", "trace_completeness", "latency"]
+    assert [c["metric"] for c in body["checks"]] == ["policy_compliance", "trace_completeness", "tool_output_contract", "latency"]
     assert all(c["passed"] in (True, None) for c in body["checks"])
 
 

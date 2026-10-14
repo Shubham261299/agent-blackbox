@@ -9,6 +9,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
+from blackbox.agent.contracts import contract_problems
 from blackbox.agent.tools import REFUND_MAX_AMOUNT
 from blackbox.evals.cases import EvalCase, ExpectedCall
 from blackbox.evals.trajectory import ToolCallRecord, Trajectory, as_float, as_int
@@ -21,6 +22,7 @@ TOOL = "tool_correctness"
 ARGS = "argument_correctness"
 EFFICIENCY = "step_efficiency"
 TRACE = "trace_completeness"
+CONTRACT = "tool_output_contract"
 LATENCY = "latency"
 
 GATING = {TASK_COMPLETION, POLICY}
@@ -348,6 +350,21 @@ def check_trace_completeness(traj: Trajectory) -> CheckResult:
     return _result(TRACE, problems, "the trace is whole and consistent")
 
 
+def check_tool_output_contract(traj: Trajectory) -> CheckResult:
+    """Needs no expectations. A tool call that succeeded but returned something its contract does not allow is
+    the silent kind of failure: nothing errors, so only looking at the data notices it."""
+    problems: list[str] = []
+    spans: list[str] = []
+    for call in traj.tool_calls:
+        if not call.succeeded:
+            continue  # a failed call's output is an error message, not the tool's result
+        issues = contract_problems(call.name, call.output)
+        if issues:
+            problems.append(f"{call.name} returned data that breaks its contract: {'; '.join(issues)}")
+            spans.append(call.span_id)
+    return _result(CONTRACT, problems, "every successful tool call returned what its contract allows", spans)
+
+
 def check_latency(traj: Trajectory) -> CheckResult:
     total = traj.duration_ms
     model_ms = sum(m.duration_ms for m in traj.model_calls)
@@ -371,13 +388,14 @@ def evaluate_case(case: EvalCase, traj: Trajectory) -> list[CheckResult]:
         check_argument_correctness(case, traj),
         check_step_efficiency(case, traj),
         check_trace_completeness(traj),
+        check_tool_output_contract(traj),
         check_latency(traj),
     ]
 
 
 def evaluate_generic(traj: Trajectory) -> list[CheckResult]:
     """Checks that need no expectations, so any run can be evaluated, including one started from the UI."""
-    return [check_policy_compliance(traj), check_trace_completeness(traj), check_latency(traj)]
+    return [check_policy_compliance(traj), check_trace_completeness(traj), check_tool_output_contract(traj), check_latency(traj)]
 
 
 def case_passed(results: list[CheckResult]) -> bool:
