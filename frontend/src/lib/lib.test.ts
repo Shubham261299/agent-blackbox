@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { parseHash } from "../hooks/useHashRoute";
 import { span } from "../test/factories";
+import { JUDGED_METRICS, METRICS, kindNote, metricLabel, ratePercent } from "./metrics";
 import { median, splitModel, timeAgo } from "./format";
 import { countRedactions, parseMaybeJson, prettyJson, splitRedactions } from "./redaction";
 import { buildRows, traceDurationMs } from "./spanTree";
@@ -134,5 +136,37 @@ describe("format helpers", () => {
   it("splits provider from model name, keeping colons in the name", () => {
     expect(splitModel("ollama:qwen2.5:7b")).toEqual({ provider: "ollama", name: "qwen2.5:7b" });
     expect(splitModel("plain")).toEqual({ provider: "", name: "plain" });
+  });
+});
+
+describe("routes", () => {
+  it("parses run, evaluation and default routes", () => {
+    expect(parseHash("")).toEqual({ name: "runs" });
+    expect(parseHash("#/")).toEqual({ name: "runs" });
+    expect(parseHash("#/runs/run-1")).toEqual({ name: "run", runId: "run-1" });
+    expect(parseHash("#/evals")).toEqual({ name: "evals" });
+    expect(parseHash("#/evals/")).toEqual({ name: "evals" });
+    expect(parseHash("#/evals/eval-9")).toEqual({ name: "eval", evalId: "eval-9" });
+    expect(parseHash("#/nonsense")).toEqual({ name: "runs" });
+  });
+});
+
+describe("metric helpers", () => {
+  it("every judged metric has a label and a plain-language description", () => {
+    for (const m of JUDGED_METRICS) expect(METRICS[m]?.label && METRICS[m]?.what).toBeTruthy();
+    expect(metricLabel("policy_compliance")).toBe("Policy compliance");
+    expect(metricLabel("something_new")).toBe("something new");
+  });
+
+  it("computes rates without dividing by zero", () => {
+    expect(ratePercent(3, 4)).toBe(75);
+    expect(ratePercent(0, 0)).toBe(0);
+  });
+
+  it("states what each kind of evaluation does and does not show", () => {
+    const base = { model: "ollama:qwen2.5:7b", n_cases: 24, seed: 0 };
+    expect(kindNote({ ...base, kind: "benchmark" })).toContain("one run per case (n=24)");
+    expect(kindNote({ ...base, kind: "reference" })).toContain("says nothing about any model");
+    expect(kindNote({ ...base, kind: "validation" })).toContain("reacted exactly as expected");
   });
 });

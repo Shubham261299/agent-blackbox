@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { ApiError, ApiUnreachableError } from "../api/client";
 import { useDataSource } from "../api/context";
-import type { RunRecord, SpanRecord } from "../api/types";
+import type { RunEvaluation, RunRecord, SpanRecord } from "../api/types";
 import { ApiDown } from "../components/ApiDown";
 import { CopyButton } from "../components/CopyButton";
+import { EvaluationCard } from "../components/EvaluationCard";
 import { Icon } from "../components/Icon";
 import { RedactedText } from "../components/RedactedText";
 import { SpanInspector } from "../components/SpanInspector";
@@ -14,8 +15,18 @@ import { clockTime, splitModel } from "../lib/format";
 import { buildRows } from "../lib/spanTree";
 import { formatDuration } from "../lib/timeScale";
 
-/** Open on the span you most likely came to see: the innermost failure, else the whole run. */
-export function defaultSelection(spans: SpanRecord[]): string | null {
+/**
+ * Open on the span you most likely came to see: the span a failed gating check points at, else a failed
+ * check's span, else the innermost failed span, else the whole run.
+ */
+export function defaultSelection(spans: SpanRecord[], evaluation?: RunEvaluation): string | null {
+  const ids = new Set(spans.map((s) => s.span_id));
+  const failedChecks = (evaluation?.checks ?? []).filter((c) => c.passed === false);
+  const pointed = [...failedChecks.filter((c) => c.gating), ...failedChecks.filter((c) => !c.gating)]
+    .flatMap((c) => c.span_ids)
+    .find((id) => ids.has(id));
+  if (pointed) return pointed;
+
   const rows = buildRows(spans);
   const failedLeaf = rows.find((r) => r.span.status === "error" && r.childCount === 0);
   return (failedLeaf ?? rows.find((r) => r.span.status === "error") ?? rows[0])?.span.span_id ?? null;
@@ -68,14 +79,20 @@ function Outcome({ run }: { run: RunRecord }) {
   );
 }
 
-function Trace({ spans }: { spans: SpanRecord[] }) {
-  const [selectedId, setSelectedId] = useState<string | null>(() => defaultSelection(spans));
+function Trace({ spans, evaluation }: { spans: SpanRecord[]; evaluation?: RunEvaluation }) {
+  const [selectedId, setSelectedId] = useState<string | null>(() => defaultSelection(spans, evaluation));
   const [view, setView] = useState<"waterfall" | "table">("waterfall");
   const selected = useMemo(() => spans.find((s) => s.span_id === selectedId) ?? null, [spans, selectedId]);
   const failed = spans.filter((s) => s.status === "error").length;
+  const findings = useMemo(
+    () => (evaluation?.checks ?? []).filter((c) => c.passed === false && selectedId !== null && c.span_ids.includes(selectedId)),
+    [evaluation, selectedId],
+  );
 
   return (
-    <div className="trace-layout">
+    <>
+      {evaluation && <EvaluationCard evaluation={evaluation} onShowSpan={setSelectedId} />}
+      <div className="trace-layout">
       <section className="card trace" aria-labelledby="trace-title">
         <div className="trace-head">
           <div>
@@ -104,8 +121,9 @@ function Trace({ spans }: { spans: SpanRecord[] }) {
           <SpanTable spans={spans} selectedId={selectedId} onSelect={setSelectedId} />
         )}
       </section>
-      <SpanInspector span={selected} spans={spans} onSelect={setSelectedId} />
-    </div>
+      <SpanInspector span={selected} spans={spans} onSelect={setSelectedId} findings={findings} />
+      </div>
+    </>
   );
 }
 
@@ -113,8 +131,10 @@ function Trace({ spans }: { spans: SpanRecord[] }) {
 function TraceSection({ runId }: { runId: string }) {
   const source = useDataSource();
   const spans = useQuery(() => source.getSpans(runId), [source, runId]);
+  // The evaluation is a bonus: if it cannot be loaded the trace is still shown without it.
+  const evaluation = useQuery(() => source.getRunEvaluation(runId), [source, runId]);
 
-  if (spans.loading && !spans.data)
+  if ((spans.loading && !spans.data) || (evaluation.loading && !evaluation.data && !evaluation.error))
     return (
       <p className="muted" role="status">
         Loading trace…
@@ -133,7 +153,7 @@ function TraceSection({ runId }: { runId: string }) {
         <p>This run has no trace data, so there is nothing to inspect.</p>
       </section>
     );
-  return <Trace spans={spans.data} />;
+  return <Trace spans={spans.data} evaluation={evaluation.data} />;
 }
 
 export function RunDetailPage({ runId }: { runId: string }) {

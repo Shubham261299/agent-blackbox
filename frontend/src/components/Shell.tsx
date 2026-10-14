@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { Route } from "../hooks/useHashRoute";
 import { useTheme, type ThemePreference } from "../hooks/useTheme";
 import { Icon } from "./Icon";
 
@@ -20,8 +21,10 @@ function BrandMark() {
   );
 }
 
-export function Shell({ children, demo }: { children: ReactNode; demo: boolean }) {
+export function Shell({ children, demo, route }: { children: ReactNode; demo: boolean; route: Route }) {
   const [theme, setTheme] = useTheme();
+  const inRuns = route.name === "runs" || route.name === "run";
+  const inEvals = route.name === "evals" || route.name === "eval";
   return (
     <div className="shell">
       <header className="topbar">
@@ -31,6 +34,14 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
             <span className="brand-name">Agent Blackbox</span>
             <span className="brand-tag">Flight recorder for AI agents</span>
           </a>
+          <nav className="nav" aria-label="Main">
+            <a href="#/" aria-current={inRuns ? "page" : undefined}>
+              Runs
+            </a>
+            <a href="#/evals" aria-current={inEvals ? "page" : undefined}>
+              Evaluations
+            </a>
+          </nav>
           <div className="topbar-right">
             <span className="local-note" title="Runs, traces and evaluations stay on this machine.">
               <Icon name="lock" size={13} />

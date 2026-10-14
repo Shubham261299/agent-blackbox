@@ -1,4 +1,4 @@
-import type { RunRecord, RunRequest, ScenarioInfo, SpanRecord } from "./types";
+import type { EvalReport, EvalRunSummary, RunEvaluation, RunRecord, RunRequest, ScenarioInfo, SpanRecord } from "./types";
 
 /**
  * Everything the UI reads goes through this interface, so a prebaked-JSON source (static demo)
@@ -7,11 +7,17 @@ import type { RunRecord, RunRequest, ScenarioInfo, SpanRecord } from "./types";
 export interface DataSource {
   readonly kind: "live" | "demo";
   readonly canStartRuns: boolean;
+  /** Scripted evaluation batches can be started from the UI (real-model benchmarks use the CLI). */
+  readonly canStartEvals: boolean;
   listRuns(): Promise<RunRecord[]>;
   getRun(runId: string): Promise<RunRecord>;
   getSpans(runId: string): Promise<SpanRecord[]>;
   listScenarios(): Promise<ScenarioInfo[]>;
   startRun(request: RunRequest): Promise<RunRecord>;
+  listEvals(): Promise<EvalRunSummary[]>;
+  getEval(evalId: string): Promise<EvalReport>;
+  getRunEvaluation(runId: string): Promise<RunEvaluation>;
+  startEval(mode: "reference" | "faults"): Promise<EvalRunSummary>;
   /** Link to the same trace in Jaeger, when that backend exists. */
   traceUrl(traceId: string): string | null;
 }
@@ -62,6 +68,7 @@ export function createApiSource(base = "/api"): DataSource {
   return {
     kind: "live",
     canStartRuns: true,
+    canStartEvals: true,
     listRuns: () => request<RunRecord[]>("/runs"),
     getRun: (id) => request<RunRecord>(`/runs/${encodeURIComponent(id)}`),
     getSpans: (id) => request<SpanRecord[]>(`/runs/${encodeURIComponent(id)}/spans`),
@@ -71,6 +78,15 @@ export function createApiSource(base = "/api"): DataSource {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+      }),
+    listEvals: () => request<EvalRunSummary[]>("/evals"),
+    getEval: (id) => request<EvalReport>(`/evals/${encodeURIComponent(id)}`),
+    getRunEvaluation: (id) => request<RunEvaluation>(`/runs/${encodeURIComponent(id)}/evaluation`),
+    startEval: (mode) =>
+      request<EvalRunSummary>("/evals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
       }),
     traceUrl: (traceId) => `${JAEGER_UI}/trace/${traceId}`,
   };

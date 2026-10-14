@@ -5,7 +5,7 @@ import { ApiError } from "../api/client";
 import type { DataSource } from "../api/client";
 import { DataSourceContext } from "../api/context";
 import { fakeSource } from "../test/fakeSource";
-import { happyPathSpans, run, span } from "../test/factories";
+import { happyPathSpans, run, runEvaluation, span, withFailures } from "../test/factories";
 import { RunDetailPage, defaultSelection } from "./RunDetailPage";
 
 function renderPage(source: DataSource, runId = "run-aaaa1111") {
@@ -28,6 +28,22 @@ describe("defaultSelection", () => {
     expect(defaultSelection([span({ span_id: "root", name: "agent.run", status: "error" })])).toBe("root");
     expect(defaultSelection(happyPathSpans())).toBe("root");
     expect(defaultSelection([])).toBeNull();
+  });
+
+  it("prefers the span a failed gating check points at, then a failed reported check, over a plain failed span", () => {
+    const spans = [
+      span({ span_id: "root", name: "agent.run" }),
+      span({ span_id: "t1", parent_span_id: "root", name: "tool.a", start_offset_ms: 1, status: "error" }),
+      span({ span_id: "t2", parent_span_id: "root", name: "tool.b", start_offset_ms: 2 }),
+      span({ span_id: "t3", parent_span_id: "root", name: "tool.c", start_offset_ms: 3 }),
+    ];
+    const soft = runEvaluation({ checks: withFailures({ tool_correctness: { span_ids: ["t3"] } }) });
+    expect(defaultSelection(spans, soft)).toBe("t3");
+    const both = runEvaluation({ checks: withFailures({ tool_correctness: { span_ids: ["t3"] }, policy_compliance: { gating: true, span_ids: ["t2"] } }) });
+    expect(defaultSelection(spans, both)).toBe("t2");
+    const unknownSpan = runEvaluation({ checks: withFailures({ policy_compliance: { gating: true, span_ids: ["gone"] } }) });
+    expect(defaultSelection(spans, unknownSpan)).toBe("t1"); // a span id that is not in the trace is ignored
+    expect(defaultSelection(spans, runEvaluation())).toBe("t1"); // nothing failed in the evaluation: the failed span wins
   });
 });
 
@@ -129,6 +145,62 @@ describe("RunDetailPage", () => {
   it("says so when a finished run really has no spans", async () => {
     renderPage(fakeSource({ getSpans: vi.fn().mockResolvedValue([]) }));
     expect(await screen.findByText("No spans recorded")).toBeInTheDocument();
+  });
+
+  it("shows the run's evaluation above the trace, failures first, and a path to the failing span", async () => {
+    const user = userEvent.setup();
+    const evaluation = runEvaluation({
+      checks: withFailures({
+        policy_compliance: { gating: true, reason: "refund on order 42 was not approved by a prior policy check", span_ids: ["t1"] },
+      }),
+    });
+    renderPage(fakeSource({ getRunEvaluation: vi.fn().mockResolvedValue(evaluation) }));
+
+    const card = await screen.findByRole("region", { name: "Evaluation" });
+    expect(card).toHaveTextContent("Case N1 in eval-bench");
+    expect(card).toHaveTextContent("1 failed, 1 of them gating");
+    const rows = within(card).getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("Policy compliance"); // the failure is listed first
+    expect(rows[0]).toHaveTextContent("gates the run");
+
+    // the page opens on the span the failed gating check points at, with the finding already shown
+    const panel = await screen.findByRole("complementary", { name: "Span inspector" });
+    expect(within(panel).getByRole("heading", { level: 2, name: "tool.lookup_order" })).toBeInTheDocument();
+    expect(within(panel).getByRole("region", { name: "Evaluation findings" })).toHaveTextContent("not approved by a prior policy check");
+
+    // move elsewhere: the finding belongs to that one span only
+    const wf = screen.getByRole("group", { name: "Trace waterfall" });
+    await user.click(within(wf).getByText("agent.run"));
+    expect(within(panel).queryByRole("region", { name: "Evaluation findings" })).not.toBeInTheDocument();
+
+    // and "Show span" takes you back to the evidence
+    await user.click(within(card).getByRole("button", { name: "Show span" }));
+    expect(within(panel).getByRole("heading", { level: 2, name: "tool.lookup_order" })).toBeInTheDocument();
+    expect(within(panel).getByRole("region", { name: "Evaluation findings" })).toBeInTheDocument();
+  });
+
+  it("does not show findings on spans the failed checks do not point at", async () => {
+    const user = userEvent.setup();
+    const evaluation = runEvaluation({ checks: withFailures({ policy_compliance: { gating: true, reason: "x", span_ids: ["t1"] } }) });
+    renderPage(fakeSource({ getRunEvaluation: vi.fn().mockResolvedValue(evaluation) }));
+    const panel = await screen.findByRole("complementary", { name: "Span inspector" });
+    const wf = screen.getByRole("group", { name: "Trace waterfall" });
+    await user.click(within(wf).getByText("model.finalize")); // a span no failed check points at
+    expect(within(panel).getByRole("heading", { level: 2, name: "model.finalize" })).toBeInTheDocument();
+    expect(within(panel).queryByRole("region", { name: "Evaluation findings" })).not.toBeInTheDocument();
+  });
+
+  it("says when a run is not part of an evaluation", async () => {
+    renderPage(fakeSource({ getRunEvaluation: vi.fn().mockResolvedValue(runEvaluation({ stored: false, eval_id: null, case_id: null })) }));
+    const card = await screen.findByRole("region", { name: "Evaluation" });
+    expect(card).toHaveTextContent("not part of an evaluation");
+    expect(card).toHaveTextContent("Nothing failed.");
+  });
+
+  it("still shows the trace when the evaluation cannot be loaded", async () => {
+    renderPage(fakeSource({ getRunEvaluation: vi.fn().mockRejectedValue(new ApiError("boom", 500)) }));
+    expect(await screen.findByRole("group", { name: "Trace waterfall" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Evaluation" })).not.toBeInTheDocument();
   });
 
   it("handles an unknown run id", async () => {

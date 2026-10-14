@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import type { SpanEvent, SpanRecord } from "../api/types";
+import type { CheckResult, SpanEvent, SpanRecord } from "../api/types";
 import { formatDuration, formatOffset } from "../lib/timeScale";
+import { metricLabel } from "../lib/metrics";
 import { countRedactions, parseMaybeJson, prettyJson } from "../lib/redaction";
 import { CodeBlock, RedactedText } from "./RedactedText";
 import { CopyButton } from "./CopyButton";
@@ -120,10 +121,13 @@ export function SpanInspector({
   span,
   spans,
   onSelect,
+  findings = [],
 }: {
   span: SpanRecord | null;
   spans: SpanRecord[];
   onSelect: (spanId: string) => void;
+  /** Failed evaluation checks that point at this span. */
+  findings?: CheckResult[];
 }) {
   if (!span) {
     return (
@@ -174,6 +178,22 @@ export function SpanInspector({
             </p>
           </div>
         </div>
+      )}
+
+      {findings.length > 0 && (
+        <section className="callout warn" aria-label="Evaluation findings">
+          <Icon name="alert" size={15} />
+          <div>
+            <strong>Evaluation {findings.length === 1 ? "finding" : "findings"}</strong>
+            <ul>
+              {findings.map((f) => (
+                <li key={f.metric}>
+                  <span className="finding-metric">{metricLabel(f.metric)}</span>: {f.reason}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
       )}
 
       {redactions > 0 && (
