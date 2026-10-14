@@ -33,12 +33,19 @@ Rough target, ordered by what the audience sees first. A day is done only when i
 - **Done when** you can click through a real run and see timing and errors. -> **Met**, checked in rendered screenshots (Edge headless) at desktop and narrow width, light and dark, on a real `qwen2.5:7b` run, a failed-tool run and a failed run.
 - Not done: no real-browser interaction test (clicks/keys are covered by Testing Library, not a real browser); Day 6 owns the static demo build.
 
-## Day 3 — Evaluation
-- [ ] Golden set of 20–30 tasks: normal, ambiguous, wrong-tool, tool-failure, constraint-violation
-- [ ] Deterministic checks: task completion, tool/argument correctness, step efficiency, policy compliance, trace completeness
-- [ ] Pytest suite on scripted model
-- [ ] Evaluation report view in UI
-- **Done when** `pytest` yields a repeatable score table shown per run in the UI.
+## Day 3 — Evaluation — DONE (not committed; detail in [docs/day-3-evaluation-plan.md](docs/day-3-evaluation-plan.md))
+- [x] 3.1 Seed orders 46-49; case schema; 24 golden cases (normal 8, ambiguous 4, wrong-tool 4, tool-failure 4, constraint 4); dataset self-consistency tests
+- [x] 3.2 Trajectory adapter: stored (redacted) spans become one plain object that every check reads
+- [x] 3.3 Seven checks: task completion and policy compliance gate the run; tool correctness, argument correctness, step efficiency, trace completeness and latency are reported. A catalog of 10 planted faults proves each check catches its fault and nothing else (zero false alarms); each rule is mutation-checked
+- [x] 3.4 Shared `RunService`; `eval_runs`/`eval_cases`/`eval_results` tables; eval runner, CLI (`python -m blackbox.evals run --mode ollama|reference|faults`) and API
+- [x] 3.5 Real benchmark: `qwen2.5:7b`, seed 0, golden-v2: **19 of 24 runs passed both gating checks** (eval-5b8f6d3c, 4 minutes on CPU). Every failure was triaged (see BRIEF.md "Day 3 findings")
+- [x] 3.6 UI: evaluations list, report (headline, per-check bars, per-category bars, case x check matrix, failing first), Evaluation card on each run, Findings on the span, validation shown as detection rate and false alarms
+- [x] 3.7 Docs updated; local commits pending your go-ahead
+- [ ] 3.8 *(Day 7)* DeepEval adapter, tool-correctness cross-check, judged subset of 6 labelled as estimates
+- [ ] 3.9 *(later, only if needed)* keyed digest of sensitive args so address values can be verified from a redacted trace
+- **Done when** `pytest` passes with the exact fault-catalog matrix, a stored real-model evaluation exists, and the UI shows it per case and metric with a path to the failing span. -> **Met.**
+- Numbers: 192 backend tests (incl. 1 Jaeger integration) and 69 frontend tests; frontend suite repeated 3x with no flakes.
+- Limits: n=24, one run per case, one model. Address values are not verified (option B). No judge-model metrics yet.
 
 ## Day 4 — Failure lab
 - [ ] Faults: tool timeout, malformed tool output, wrong tool choice, failed model response
