@@ -1,4 +1,7 @@
-import type { CheckResult, EvalCaseResult, EvalReport, RunEvaluation, RunRecord, ScenarioInfo, SpanRecord } from "../api/types";
+import type {
+  CheckResult, EvalCaseResult, EvalReport, FaultLabNote, LabRunSummary, RunEvaluation, RunFault, RunRecord, ScenarioInfo,
+  SpanRecord, Suspect,
+} from "../api/types";
 
 export function span(over: Partial<SpanRecord> & Pick<SpanRecord, "span_id" | "name">): SpanRecord {
   return {
@@ -66,6 +69,7 @@ const ALL_PASS: CheckResult[] = [
   check({ metric: "argument_correctness", reason: "arguments match" }),
   check({ metric: "step_efficiency", reason: "3 tool calls (optimal 3)" }),
   check({ metric: "trace_completeness", reason: "the trace is whole and consistent" }),
+  check({ metric: "tool_output_contract", reason: "every successful tool call returned what its contract allows" }),
   check({ metric: "latency", passed: null, score: null, reason: "total 22212.0 ms" }),
 ];
 
@@ -111,5 +115,57 @@ export function evalReport(over: Partial<EvalReport> = {}): EvalReport {
 }
 
 export function runEvaluation(over: Partial<RunEvaluation> = {}): RunEvaluation {
-  return { run_id: "run-aaaa1111", eval_id: "eval-bench", case_id: "N1", stored: true, checks: ALL_PASS, ...over };
+  return { run_id: "run-aaaa1111", eval_id: "eval-bench", case_id: "N1", stored: true, checks: ALL_PASS, suspects: [], ...over };
+}
+
+export function suspect(over: Partial<Suspect> = {}): Suspect {
+  return { span_id: "t1", span_name: "tool.lookup_order", tier: 0, source: "tool output contract", reason: "lookup_order returned an error page", ...over };
+}
+
+export function runFault(over: Partial<RunFault> = {}): RunFault {
+  return { kind: "malformed_output", tool: "lookup_order", occurrence: 1, description: "malformed_output on lookup_order call 1", origin_span_id: "t1", fired: true, ...over };
+}
+
+function labRun(over: Partial<LabRunSummary> = {}): LabRunSummary {
+  return { run_id: "run-control", run_status: "ok", gating_passed: true, failed_checks: [], duration_ms: 3, tool_calls: 3, answer: "done", ...over };
+}
+
+export function faultLabNote(over: Partial<FaultLabNote> = {}): FaultLabNote {
+  return {
+    kind: "faultlab", fault: "malformed_output", title: "Malformed tool output",
+    description: "The order lookup returns an error web page instead of an order.",
+    injected: "malformed_output on lookup_order call 1", fired: true, origin_span_id: "t1", origin_span_name: "tool.lookup_order",
+    suspects: [suspect(), suspect({ span_id: "t9", span_name: "tool.issue_refund", tier: 1, source: "policy compliance", reason: "refund not approved" })],
+    rank: 1, hit_at_1: true, hit_at_3: true,
+    control: labRun(),
+    faulted: labRun({ run_id: "run-faulted", failed_checks: ["tool_output_contract"], duration_ms: 4 }),
+    effect: "silent", ...over,
+  };
+}
+
+export function faultLabCase(over: Partial<EvalCaseResult> = {}, note: Partial<FaultLabNote> = {}): EvalCaseResult {
+  const n = faultLabNote(note);
+  return {
+    case_id: n.fault, category: "faultlab", task: "Order 42 arrived damaged, please refund it.", run_id: "run-faulted",
+    run_status: "ok", passed: n.hit_at_1, duration_ms: 4, note: n, checks: [], ...over,
+  };
+}
+
+export function faultLabReport(over: Partial<EvalReport> = {}): EvalReport {
+  return {
+    eval_id: "eval-lab", kind: "faultlab", model: "scripted:faultlab", dataset_version: "golden-v2", dataset_hash: "abc123def456",
+    seed: null, started_at: new Date().toISOString(), finished_at: new Date().toISOString(), status: "done", n_cases: 2, n_passed: 1,
+    cases: [
+      faultLabCase(),
+      faultLabCase({ case_id: "tool_timeout", run_id: "run-timeout" }, {
+        fault: "tool_timeout", title: "Tool timeout", description: "The policy check does not answer in time.",
+        injected: "tool_timeout on check_refund_policy call 1", effect: "run_failed", rank: 2, hit_at_1: false, hit_at_3: true,
+        origin_span_id: "t5", origin_span_name: "tool.check_refund_policy",
+        suspects: [suspect({ span_id: "t1", span_name: "tool.lookup_order", tier: 3, source: "error status", reason: "boom" }),
+                   suspect({ span_id: "t5", span_name: "tool.check_refund_policy", tier: 3, source: "error status", reason: "timed out after 0.3s" })],
+        faulted: labRun({ run_id: "run-timeout", run_status: "error", gating_passed: false, failed_checks: ["task_completion"], tool_calls: 2, duration_ms: 310 }),
+      }),
+    ],
+    metrics: [], categories: [], ...over,
+  };
 }

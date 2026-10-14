@@ -1,4 +1,4 @@
-import type { EvalReport, EvalRunSummary, RunEvaluation, RunRecord, RunRequest, ScenarioInfo, SpanRecord } from "./types";
+import type { EvalReport, EvalRunSummary, RunEvaluation, RunFault, RunRecord, RunRequest, ScenarioInfo, SpanRecord } from "./types";
 
 /**
  * Everything the UI reads goes through this interface, so a prebaked-JSON source (static demo)
@@ -17,7 +17,8 @@ export interface DataSource {
   listEvals(): Promise<EvalRunSummary[]>;
   getEval(evalId: string): Promise<EvalReport>;
   getRunEvaluation(runId: string): Promise<RunEvaluation>;
-  startEval(mode: "reference" | "faults"): Promise<EvalRunSummary>;
+  getRunFaults(runId: string): Promise<RunFault[]>;
+  startEval(mode: "reference" | "faults" | "faultlab"): Promise<EvalRunSummary>;
   /** Link to the same trace in Jaeger, when that backend exists. */
   traceUrl(traceId: string): string | null;
 }
@@ -82,6 +83,7 @@ export function createApiSource(base = "/api"): DataSource {
     listEvals: () => request<EvalRunSummary[]>("/evals"),
     getEval: (id) => request<EvalReport>(`/evals/${encodeURIComponent(id)}`),
     getRunEvaluation: (id) => request<RunEvaluation>(`/runs/${encodeURIComponent(id)}/evaluation`),
+    getRunFaults: (id) => request<RunFault[]>(`/runs/${encodeURIComponent(id)}/faults`),
     startEval: (mode) =>
       request<EvalRunSummary>("/evals", {
         method: "POST",

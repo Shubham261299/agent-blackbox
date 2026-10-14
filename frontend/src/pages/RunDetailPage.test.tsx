@@ -5,7 +5,7 @@ import { ApiError } from "../api/client";
 import type { DataSource } from "../api/client";
 import { DataSourceContext } from "../api/context";
 import { fakeSource } from "../test/fakeSource";
-import { happyPathSpans, run, runEvaluation, span, withFailures } from "../test/factories";
+import { happyPathSpans, run, runEvaluation, runFault, span, suspect, withFailures } from "../test/factories";
 import { RunDetailPage, defaultSelection } from "./RunDetailPage";
 
 function renderPage(source: DataSource, runId = "run-aaaa1111") {
@@ -201,6 +201,51 @@ describe("RunDetailPage", () => {
     renderPage(fakeSource({ getRunEvaluation: vi.fn().mockRejectedValue(new ApiError("boom", 500)) }));
     expect(await screen.findByRole("group", { name: "Trace waterfall" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Evaluation" })).not.toBeInTheDocument();
+  });
+
+  it("says where to look first and takes you there", async () => {
+    const user = userEvent.setup();
+    const evaluation = runEvaluation({ suspects: [suspect({ span_id: "t1", span_name: "tool.lookup_order", reason: "returned an error page" }), suspect({ span_id: "m2" })] });
+    renderPage(fakeSource({ getRunEvaluation: vi.fn().mockResolvedValue(evaluation) }));
+    const card = await screen.findByRole("region", { name: "Evaluation" });
+    expect(card).toHaveTextContent("Where to look first:");
+    expect(card).toHaveTextContent("tool output contract: returned an error page (and 1 more)");
+    await user.click(within(card).getByRole("button", { name: "tool.lookup_order" }));
+    const panel = screen.getByRole("complementary", { name: "Span inspector" });
+    expect(within(panel).getByRole("heading", { level: 2, name: "tool.lookup_order" })).toBeInTheDocument();
+  });
+
+  it("shows nothing about where to look when there are no suspects", async () => {
+    renderPage(fakeSource());
+    const card = await screen.findByRole("region", { name: "Evaluation" });
+    expect(card).not.toHaveTextContent("Where to look first");
+  });
+
+  it("marks a failure-lab run: a callout, a badge on the planted span, and a way to jump to it", async () => {
+    const user = userEvent.setup();
+    renderPage(fakeSource({ getRunFaults: vi.fn().mockResolvedValue([runFault()]) }));
+    const callout = await screen.findByRole("region", { name: "Planted fault" });
+    expect(callout).toHaveTextContent("a fault was planted in this run");
+    expect(callout).toHaveTextContent("malformed_output on lookup_order call 1");
+    expect(callout).toHaveTextContent("recorded outside the trace");
+
+    const wf = screen.getByRole("group", { name: "Trace waterfall" });
+    const badges = within(wf).getAllByText("planted");
+    expect(badges).toHaveLength(1);
+    expect(badges[0]?.closest("button")).toHaveTextContent("tool.lookup_order");
+
+    await user.click(within(wf).getByText("agent.run")); // move away, then come back
+    await user.click(within(callout).getByRole("button", { name: "Show the planted span" }));
+    expect(within(screen.getByRole("complementary", { name: "Span inspector" })).getByRole("heading", { level: 2, name: "tool.lookup_order" })).toBeInTheDocument();
+  });
+
+  it("says so when a planted fault never fired, and shows nothing for ordinary runs", async () => {
+    const { unmount } = renderPage(fakeSource({ getRunFaults: vi.fn().mockResolvedValue([runFault({ origin_span_id: null, fired: false })]) }));
+    expect(await screen.findByText("(it never fired)")).toBeInTheDocument();
+    unmount();
+    renderPage(fakeSource());
+    await screen.findByRole("group", { name: "Trace waterfall" });
+    expect(screen.queryByRole("region", { name: "Planted fault" })).not.toBeInTheDocument();
   });
 
   it("handles an unknown run id", async () => {

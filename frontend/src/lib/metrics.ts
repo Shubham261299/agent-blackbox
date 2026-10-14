@@ -31,13 +31,17 @@ export const METRICS: Record<string, MetricInfo> = {
     label: "Trace completeness",
     what: "The recorded trace is whole and consistent: one root, every call has a span, errors are marked.",
   },
+  tool_output_contract: {
+    label: "Tool output contract",
+    what: "Every successful tool call returned what its contract allows. Catches the silent failure, where a tool answers with garbage and nothing raises.",
+  },
   latency: {
     label: "Latency",
     what: "How long the run and its parts took. Informational, not a pass or fail.",
   },
 };
 
-/** The six metrics that produce a pass or fail, in display order. */
+/** The metrics that produce a pass or fail, in display order. */
 export const JUDGED_METRICS = [
   "task_completion",
   "policy_compliance",
@@ -45,6 +49,7 @@ export const JUDGED_METRICS = [
   "argument_correctness",
   "step_efficiency",
   "trace_completeness",
+  "tool_output_contract",
 ] as const;
 
 export function metricLabel(metric: string): string {
@@ -55,6 +60,7 @@ export const KIND_LABEL: Record<EvalKind, string> = {
   benchmark: "Benchmark",
   reference: "Reference run",
   validation: "Check validation",
+  faultlab: "Failure lab",
 };
 
 /** What a viewer should and should not conclude from this kind of evaluation. */
@@ -64,6 +70,8 @@ export function kindNote(report: Pick<EvalReport, "kind" | "model" | "n_cases" |
       return `Measured on ${report.model} with seed ${report.seed ?? 0}, one run per case (n=${report.n_cases}). One sample per case, so small differences are noise.`;
     case "reference":
       return "A scripted, correct run of every case. It shows the pipeline works end to end and says nothing about any model.";
+    case "faultlab":
+      return "Each fault was planted into the same refund task, next to an untouched control run. Trace analysis then ranked suspect spans from the trace alone, without being told what was planted. Located means its top suspect is the span the fault was planted in. Four faults on one task is a demonstration, not a benchmark.";
     case "validation":
       return "Known faults planted into runs. A row passes when the checks reacted exactly as expected: they caught the fault and flagged nothing else.";
   }

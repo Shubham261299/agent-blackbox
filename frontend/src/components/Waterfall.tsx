@@ -39,10 +39,13 @@ export function Waterfall({
   spans,
   selectedId,
   onSelect,
+  plantedIds,
 }: {
   spans: SpanRecord[];
   selectedId: string | null;
   onSelect: (spanId: string) => void;
+  /** Spans a failure-lab fault was planted in (ground truth, kept outside the trace). */
+  plantedIds?: ReadonlySet<string>;
 }) {
   const rows = useMemo(() => buildRows(spans), [spans]);
   const total = useMemo(() => traceDurationMs(spans), [spans]);
@@ -118,6 +121,11 @@ export function Waterfall({
                   <Icon name={TYPE_ICON[span.span_type]} size={14} />
                 </span>
                 <span className="wf-name">{span.name}</span>
+                {plantedIds?.has(span.span_id) && (
+                  <span className="planted-badge" title="A fault was planted in this span (failure lab)">
+                    planted
+                  </span>
+                )}
                 {failed && (
                   <span className="wf-flag">
                     <Icon name="x" size={13} />

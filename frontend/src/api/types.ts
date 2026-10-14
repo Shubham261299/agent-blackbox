@@ -50,7 +50,7 @@ export interface CheckResult {
   gating: boolean;
 }
 
-export type EvalKind = "benchmark" | "reference" | "validation";
+export type EvalKind = "benchmark" | "reference" | "validation" | "faultlab";
 
 export interface EvalRunSummary {
   eval_id: string;
@@ -66,6 +66,64 @@ export interface EvalRunSummary {
   n_passed: number;
 }
 
+export interface Suspect {
+  span_id: string;
+  span_name: string;
+  /** 0 contract violation, 1 failed gating check, 2 failed reported check, 3 error status */
+  tier: number;
+  source: string;
+  reason: string;
+}
+
+/** Ground truth for a failure-lab run: what was planted and where. Kept outside the trace on purpose. */
+export interface RunFault {
+  kind: string;
+  tool: string | null;
+  occurrence: number;
+  description: string;
+  origin_span_id: string | null;
+  fired: boolean;
+}
+
+export interface ValidationNote {
+  kind?: undefined;
+  fault?: string;
+  description?: string;
+  expected_fail?: string[];
+  actual_fail?: string[];
+  matched?: boolean;
+}
+
+export interface LabRunSummary {
+  run_id: string;
+  run_status: RunStatus;
+  gating_passed: boolean;
+  failed_checks: string[];
+  duration_ms: number | null;
+  tool_calls: number;
+  answer: string | null;
+}
+
+export type LabEffect = "run_failed" | "gating_failed" | "silent" | "no_effect";
+
+export interface FaultLabNote {
+  kind: "faultlab";
+  fault: string;
+  title: string;
+  description: string;
+  injected: string;
+  fired: boolean;
+  origin_span_id: string | null;
+  origin_span_name: string | null;
+  suspects: Suspect[];
+  rank: number | null;
+  hit_at_1: boolean;
+  hit_at_3: boolean;
+  control: LabRunSummary;
+  faulted: LabRunSummary;
+  effect: LabEffect;
+}
+
 export interface EvalCaseResult {
   case_id: string;
   category: string;
@@ -74,13 +132,7 @@ export interface EvalCaseResult {
   run_status: RunStatus;
   passed: boolean;
   duration_ms: number | null;
-  note: {
-    fault?: string;
-    description?: string;
-    expected_fail?: string[];
-    actual_fail?: string[];
-    matched?: boolean;
-  } | null;
+  note: ValidationNote | FaultLabNote | null;
   checks: CheckResult[];
 }
 
@@ -110,6 +162,7 @@ export interface RunEvaluation {
   case_id: string | null;
   stored: boolean;
   checks: CheckResult[];
+  suspects: Suspect[];
 }
 
 export interface ScenarioInfo {

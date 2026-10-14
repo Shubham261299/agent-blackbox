@@ -44,6 +44,7 @@ export function EvaluationCard({
 }) {
   const failed = evaluation.checks.filter((c) => c.passed === false);
   const gatingFailed = failed.filter((c) => c.gating).length;
+  const top = evaluation.suspects[0];
   return (
     <section className="card evaluation" aria-labelledby="evaluation-title">
       <div className="trace-head">
@@ -63,6 +64,19 @@ export function EvaluationCard({
           </p>
         </div>
       </div>
+      {top && (
+        <p className="look-first">
+          <strong>Where to look first:</strong>{" "}
+          <button type="button" className="chip" onClick={() => onShowSpan(top.span_id)}>
+            {top.span_name}
+          </button>
+          <span className="muted small">
+            {" "}
+            {top.source}: {top.reason}
+            {evaluation.suspects.length > 1 ? ` (and ${evaluation.suspects.length - 1} more)` : ""}
+          </span>
+        </p>
+      )}
       <ul className="eval-list">
         {[...evaluation.checks]
           .sort((a, b) => Number(a.passed !== false) - Number(b.passed !== false))

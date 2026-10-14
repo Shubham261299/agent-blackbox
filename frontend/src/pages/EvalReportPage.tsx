@@ -3,11 +3,13 @@ import { ApiError, ApiUnreachableError } from "../api/client";
 import { useDataSource } from "../api/context";
 import type { EvalCaseResult, EvalReport } from "../api/types";
 import { ApiDown } from "../components/ApiDown";
+import { FaultLabReport } from "../components/FaultLabReport";
 import { Icon } from "../components/Icon";
 import { RateBar } from "../components/RateBar";
 import { runHref } from "../hooks/useHashRoute";
 import { useQuery } from "../hooks/useQuery";
 import { median } from "../lib/format";
+import { validationNote } from "../lib/notes";
 import { JUDGED_METRICS, KIND_LABEL, METRICS, kindNote, metricLabel } from "../lib/metrics";
 import { formatDuration } from "../lib/timeScale";
 
@@ -81,11 +83,14 @@ function Matrix({ report }: { report: EvalReport }) {
                       <span className="mono">{c.case_id}</span>
                       <span className="muted small">{c.category.replace("_", " ")}</span>
                     </span>
-                    <span className="case-task">{validation ? (c.note?.description ?? c.task) : c.task}</span>
-                    {validation && c.note && (
+                    <span className="case-task">{validation ? (validationNote(c)?.description ?? c.task) : c.task}</span>
+                    {validation && validationNote(c) && (
                       <span className="small muted">
-                        Expected to trip: {c.note.expected_fail?.length ? c.note.expected_fail.map(metricLabel).join(", ") : "nothing"}.{" "}
-                        {c.note.matched ? "Detected exactly that." : `Detected: ${c.note.actual_fail?.map(metricLabel).join(", ") || "nothing"}.`}
+                        Expected to trip:{" "}
+                        {validationNote(c)?.expected_fail?.length ? validationNote(c)?.expected_fail?.map(metricLabel).join(", ") : "nothing"}.{" "}
+                        {validationNote(c)?.matched
+                          ? "Detected exactly that."
+                          : `Detected: ${validationNote(c)?.actual_fail?.map(metricLabel).join(", ") || "nothing"}.`}
                       </span>
                     )}
                   </td>
@@ -110,9 +115,9 @@ function Matrix({ report }: { report: EvalReport }) {
 /** For a validation batch: per check, how many of the faults it was meant to catch did it catch, and did it raise any false alarm? */
 export function detectionRows(cases: EvalCaseResult[]) {
   return JUDGED_METRICS.map((metric) => {
-    const expected = cases.filter((c) => c.note?.expected_fail?.includes(metric));
-    const caught = expected.filter((c) => c.note?.actual_fail?.includes(metric));
-    const falseAlarms = cases.filter((c) => c.note?.actual_fail?.includes(metric) && !c.note?.expected_fail?.includes(metric));
+    const expected = cases.filter((c) => validationNote(c)?.expected_fail?.includes(metric));
+    const caught = expected.filter((c) => validationNote(c)?.actual_fail?.includes(metric));
+    const falseAlarms = cases.filter((c) => validationNote(c)?.actual_fail?.includes(metric) && !validationNote(c)?.expected_fail?.includes(metric));
     return { metric, expected: expected.length, caught: caught.length, falseAlarms: falseAlarms.length };
   });
 }
@@ -332,10 +337,14 @@ export function EvalReportPage({ evalId }: { evalId: string }) {
               </div>
             </section>
           ) : (
-            <>
-              <Summary report={data} />
-              <Matrix report={data} />
-            </>
+            data.kind === "faultlab" ? (
+              <FaultLabReport report={data} />
+            ) : (
+              <>
+                <Summary report={data} />
+                <Matrix report={data} />
+              </>
+            )
           )}
         </>
       )}

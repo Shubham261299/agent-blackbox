@@ -17,10 +17,10 @@ export function EvalsPage() {
   const evals = useQuery(() => source.listEvals(), [source], {
     refetchMs: (data) => (data?.some((e) => e.status === "running") ? 2000 : 8000),
   });
-  const [busy, setBusy] = useState<"reference" | "faults" | null>(null);
+  const [busy, setBusy] = useState<"reference" | "faults" | "faultlab" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function start(mode: "reference" | "faults") {
+  async function start(mode: "reference" | "faults" | "faultlab") {
     setBusy(mode);
     setError(null);
     try {
@@ -61,10 +61,18 @@ export function EvalsPage() {
             </div>
             <div className="eval-option">
               <h3>Check validation</h3>
-              <p>Plants 10 known faults and confirms each check catches exactly the ones it should. This is how the checks themselves are tested.</p>
+              <p>Plants known faults in scripted behaviour and confirms each check catches exactly the ones it should. This is how the checks themselves are tested.</p>
               <button type="button" className="btn" disabled={busy !== null} onClick={() => start("faults")}>
                 <Icon name={busy === "faults" ? "spinner" : "play"} size={14} className={busy === "faults" ? "spin" : undefined} />
                 Run validation
+              </button>
+            </div>
+            <div className="eval-option">
+              <h3>Failure lab</h3>
+              <p>Plants a timeout, malformed output, a wrong tool choice and a model failure, then asks trace analysis which span to look at first.</p>
+              <button type="button" className="btn" disabled={busy !== null} onClick={() => start("faultlab")}>
+                <Icon name={busy === "faultlab" ? "spinner" : "play"} size={14} className={busy === "faultlab" ? "spin" : undefined} />
+                Run failure lab
               </button>
             </div>
             <div className="eval-option">

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ApiError, ApiUnreachableError } from "../api/client";
 import { useDataSource } from "../api/context";
-import type { RunEvaluation, RunRecord, SpanRecord } from "../api/types";
+import type { RunEvaluation, RunFault, RunRecord, SpanRecord } from "../api/types";
 import { ApiDown } from "../components/ApiDown";
 import { CopyButton } from "../components/CopyButton";
 import { EvaluationCard } from "../components/EvaluationCard";
@@ -79,11 +79,13 @@ function Outcome({ run }: { run: RunRecord }) {
   );
 }
 
-function Trace({ spans, evaluation }: { spans: SpanRecord[]; evaluation?: RunEvaluation }) {
+function Trace({ spans, evaluation, faults = [] }: { spans: SpanRecord[]; evaluation?: RunEvaluation; faults?: RunFault[] }) {
   const [selectedId, setSelectedId] = useState<string | null>(() => defaultSelection(spans, evaluation));
   const [view, setView] = useState<"waterfall" | "table">("waterfall");
   const selected = useMemo(() => spans.find((s) => s.span_id === selectedId) ?? null, [spans, selectedId]);
   const failed = spans.filter((s) => s.status === "error").length;
+  const planted = faults.filter((f) => f.origin_span_id);
+  const plantedIds = useMemo(() => new Set(planted.map((f) => f.origin_span_id as string)), [planted]);
   const findings = useMemo(
     () => (evaluation?.checks ?? []).filter((c) => c.passed === false && selectedId !== null && c.span_ids.includes(selectedId)),
     [evaluation, selectedId],
@@ -91,6 +93,29 @@ function Trace({ spans, evaluation }: { spans: SpanRecord[]; evaluation?: RunEva
 
   return (
     <>
+      {faults.length > 0 && (
+        <section className="card planted" aria-label="Planted fault">
+          <Icon name="alert" size={16} />
+          <div>
+            <strong>Failure lab: a fault was planted in this run</strong>
+            <ul>
+              {faults.map((f) => (
+                <li key={f.description}>
+                  <span className="mono">{f.description}</span>
+                  {f.origin_span_id ? (
+                    <button type="button" className="chip" onClick={() => setSelectedId(f.origin_span_id)}>
+                      Show the planted span
+                    </button>
+                  ) : (
+                    <span className="muted small"> (it never fired)</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p className="muted small">This is recorded outside the trace, so trace analysis is not told about it.</p>
+          </div>
+        </section>
+      )}
       {evaluation && <EvaluationCard evaluation={evaluation} onShowSpan={setSelectedId} />}
       <div className="trace-layout">
       <section className="card trace" aria-labelledby="trace-title">
@@ -115,7 +140,7 @@ function Trace({ spans, evaluation }: { spans: SpanRecord[]; evaluation?: RunEva
         {view === "waterfall" ? (
           <>
             <Legend />
-            <Waterfall spans={spans} selectedId={selectedId} onSelect={setSelectedId} />
+            <Waterfall spans={spans} selectedId={selectedId} onSelect={setSelectedId} plantedIds={plantedIds} />
           </>
         ) : (
           <SpanTable spans={spans} selectedId={selectedId} onSelect={setSelectedId} />
@@ -133,6 +158,7 @@ function TraceSection({ runId }: { runId: string }) {
   const spans = useQuery(() => source.getSpans(runId), [source, runId]);
   // The evaluation is a bonus: if it cannot be loaded the trace is still shown without it.
   const evaluation = useQuery(() => source.getRunEvaluation(runId), [source, runId]);
+  const faults = useQuery(() => source.getRunFaults(runId), [source, runId]);
 
   if ((spans.loading && !spans.data) || (evaluation.loading && !evaluation.data && !evaluation.error))
     return (
@@ -153,7 +179,7 @@ function TraceSection({ runId }: { runId: string }) {
         <p>This run has no trace data, so there is nothing to inspect.</p>
       </section>
     );
-  return <Trace spans={spans.data} evaluation={evaluation.data} />;
+  return <Trace spans={spans.data} evaluation={evaluation.data} faults={faults.data} />;
 }
 
 export function RunDetailPage({ runId }: { runId: string }) {

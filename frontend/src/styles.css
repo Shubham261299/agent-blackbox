@@ -1147,6 +1147,10 @@ details > summary {
 .eval-option .codeline {
   width: 100%;
 }
+.eval-option .codeline code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .headline {
   padding: 18px 20px;
   display: flex;
@@ -1336,6 +1340,168 @@ table.matrix tbody tr:hover td:not(.cell[data-pass="false"]) {
 }
 .trace-head .small {
   max-width: 90ch;
+}
+
+
+/* ---------- failure lab ---------- */
+.pill[data-status="warn"] {
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+.planted-badge {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--warn-line);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  font: 650 11px/1.5 var(--font);
+  white-space: nowrap;
+}
+.planted {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border-color: var(--warn-line);
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+}
+.planted ul {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.planted li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.planted .muted {
+  color: inherit;
+  opacity: 0.8;
+}
+.look-first {
+  padding: 0 16px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 4px;
+}
+.lab-card {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lab-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.lab-head h3 {
+  font-size: 16px;
+  font-weight: 650;
+}
+.lab-desc {
+  color: var(--ink-2);
+  max-width: 80ch;
+}
+.lab-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 18px 32px;
+}
+.lab-grid h4 {
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+table.lab-compare th,
+table.lab-compare td {
+  padding: 6px 10px 6px 0;
+  text-align: left;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+  background: transparent;
+  border-top: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  white-space: normal;
+}
+table.lab-compare thead th {
+  color: var(--muted);
+  font-size: 11.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+table.lab-compare tbody th {
+  font-weight: 560;
+  color: var(--ink-2);
+  width: 34%;
+}
+table.lab-compare tr[data-changed="true"] td:last-child {
+  font-weight: 650;
+}
+.lab-effect {
+  margin-top: 8px;
+  color: var(--ink-2);
+}
+.suspects {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: decimal;
+  padding-inline-start: 22px;
+}
+.suspects li {
+  padding: 2px 4px;
+  min-width: 0;
+}
+.suspects li[data-planted="true"] {
+  background: var(--warn-bg);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.suspects .planted-badge {
+  margin-inline-start: 8px;
+}
+.suspect-reason {
+  display: block;
+  margin-top: 1px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.lab-verdict {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-weight: 600;
+}
+.lab-verdict[data-hit="true"] {
+  color: var(--ok-ink);
+}
+.lab-verdict[data-hit="false"] {
+  color: var(--crit-ink);
+}
+.lab-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.lab-links .ext {
+  margin-inline-start: 0;
 }
 
 /* ---------- responsive ---------- */
