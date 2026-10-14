@@ -3,11 +3,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 DEFAULT_OTLP_ENDPOINT = "http://localhost:4318/v1/traces"
+# Anchored to the project, not the working directory: the API, the CLI and the tests must all find the same
+# database no matter which folder they are started from.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_DB_PATH = str(REPO_ROOT / "data" / "blackbox.db")
 
 
 @dataclass(frozen=True)
 class Settings:
-    db_path: str = "data/blackbox.db"
+    db_path: str = DEFAULT_DB_PATH
     # None disables OTLP export (spans still go to SQLite).
     otlp_endpoint: str | None = DEFAULT_OTLP_ENDPOINT
     ollama_host: str = "http://localhost:11434"

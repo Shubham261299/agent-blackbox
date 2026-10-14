@@ -1,23 +1,30 @@
 """FastAPI app. Run with:  uvicorn --factory blackbox.api.main:create_app  (from ./backend)"""
-import threading
-import time
-import uuid
 from collections.abc import Callable
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from opentelemetry.sdk.trace.export import SpanExporter
 
-from blackbox.agent.loop import AgentResult, AgentRunner
-from blackbox.agent.tools import OrderDesk
+from blackbox.agent.service import RunService
 from blackbox.config import Settings, get_settings
+from blackbox.evals.cases import load_dataset
+from blackbox.evals.checks import evaluate_generic
+from blackbox.evals.runner import execute_evaluation, prepare_evaluation
+from blackbox.evals.trajectory import build_trajectory
 from blackbox.llm.base import ModelClient
 from blackbox.llm.ollama_client import OllamaClient
 from blackbox.llm.scripted import SCENARIO_INFO, scripted_model
-from blackbox.models import RunRecord, RunRequest, ScenarioInfo, SpanRecord
+from blackbox.models import (
+    EvalReport,
+    EvalRunSummary,
+    RunEvaluation,
+    RunRecord,
+    RunRequest,
+    ScenarioInfo,
+    SpanRecord,
+    StartEvalRequest,
+)
 from blackbox.store.db import Store
-from blackbox.telemetry.redaction import scrub_text
 from blackbox.telemetry.setup import Telemetry
 
 ModelFactory = Callable[[RunRequest, Settings], ModelClient]
@@ -37,7 +44,7 @@ def create_app(
     settings = settings or get_settings()
     store = Store(settings.db_path)
     telemetry = Telemetry(settings, store, extra_exporters)
-    ollama_lock = threading.Lock()  # one local model in memory at a time (16 GB machine)
+    service = RunService(settings, store, telemetry)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -45,33 +52,10 @@ def create_app(
         telemetry.shutdown()
         store.close()
 
-    app = FastAPI(title="Agent Blackbox", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Agent Blackbox", version="0.2.0", lifespan=lifespan)
     app.state.store = store
     app.state.telemetry = telemetry
-
-    def execute_run(run_id: str, model: ModelClient, task: str) -> None:
-        started = time.perf_counter()
-        lock = ollama_lock if model.provider == "ollama" else None
-        if lock:
-            lock.acquire()
-        try:
-            runner = AgentRunner(model, OrderDesk().registry(), telemetry.tracer(), settings.max_agent_steps)
-            result = runner.run(run_id, task)
-        except Exception as exc:  # defensive: AgentRunner.run already converts agent errors into a result
-            result = AgentResult("error", None, f"{type(exc).__name__}: {exc}", None, 0)
-        finally:
-            if lock:
-                lock.release()
-        duration_ms = (time.perf_counter() - started) * 1000  # agent time only, not export time
-        telemetry.flush_store()
-        store.finish_run(
-            run_id,
-            status=result.status,
-            trace_id=result.trace_id,
-            duration_ms=duration_ms,
-            final_answer=scrub_text(result.final_answer) if result.final_answer else None,
-            error=scrub_text(result.error) if result.error else None,
-        )
+    app.state.service = service
 
     @app.get("/health")
     def health() -> dict[str, str]:
@@ -81,21 +65,15 @@ def create_app(
     def list_scenarios() -> list[ScenarioInfo]:
         return [ScenarioInfo(name=n, description=d, example_task=t) for n, (d, t) in SCENARIO_INFO.items()]
 
+    # ---- runs --------------------------------------------------------------------
     @app.post("/runs", response_model=RunRecord, status_code=202)
     def start_run(request: RunRequest, background: BackgroundTasks) -> RunRecord:
         try:
             model = model_factory(request, settings)
         except KeyError as exc:
             raise HTTPException(status_code=422, detail=f"unknown scenario {exc.args[0]!r}") from None
-        run = RunRecord(
-            run_id=f"run-{uuid.uuid4().hex[:8]}",
-            task=scrub_text(request.task),
-            model=f"{model.provider}:{model.name}",
-            status="running",
-            started_at=datetime.now(UTC).isoformat(),
-        )
-        store.create_run(run)
-        background.add_task(execute_run, run.run_id, model, request.task)
+        run = service.create_run(model, request.task)
+        background.add_task(service.execute, run.run_id, model, request.task)
         return run
 
     @app.get("/runs", response_model=list[RunRecord])
@@ -114,5 +92,41 @@ def create_app(
         if store.get_run(run_id) is None:
             raise HTTPException(status_code=404, detail="run not found")
         return store.get_spans(run_id)
+
+    @app.get("/runs/{run_id}/evaluation", response_model=RunEvaluation)
+    def get_run_evaluation(run_id: str) -> RunEvaluation:
+        run = store.get_run(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="run not found")
+        found = store.find_eval_case_for_run(run_id)
+        if found:
+            eval_id, case_id = found
+            return RunEvaluation(run_id=run_id, eval_id=eval_id, case_id=case_id, stored=True,
+                                 checks=store.get_case_checks(eval_id, case_id))
+        if run.status == "running":
+            raise HTTPException(status_code=409, detail="run is still running")
+        checks = evaluate_generic(build_trajectory(run, store.get_spans(run_id)))
+        return RunEvaluation(run_id=run_id, stored=False, checks=checks)
+
+    # ---- evaluations ---------------------------------------------------------------
+    @app.get("/evals", response_model=list[EvalRunSummary])
+    def list_evals(limit: int = 50) -> list[EvalRunSummary]:
+        return store.list_eval_runs(limit)
+
+    @app.get("/evals/{eval_id}", response_model=EvalReport)
+    def get_eval(eval_id: str) -> EvalReport:
+        report = store.get_eval_report(eval_id)
+        if report is None:
+            raise HTTPException(status_code=404, detail="evaluation not found")
+        return report
+
+    @app.post("/evals", response_model=EvalRunSummary, status_code=202)
+    def start_eval(request: StartEvalRequest, background: BackgroundTasks) -> EvalRunSummary:
+        """Scripted batches only (instant). Real-model benchmarks take minutes: use the CLI,
+        `python -m blackbox.evals run --mode ollama`."""
+        dataset = load_dataset()
+        summary = prepare_evaluation(service, dataset, request.mode)
+        background.add_task(execute_evaluation, service, dataset, request.mode, summary.eval_id)
+        return summary
 
     return app

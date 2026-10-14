@@ -27,6 +27,13 @@ def telemetry(settings, store):
 
 
 @pytest.fixture
+def service(settings, store, telemetry):
+    from blackbox.agent.service import RunService
+
+    return RunService(settings, store, telemetry)
+
+
+@pytest.fixture
 def run_agent(telemetry):
     def _run(model, task="Refund order 42, it arrived damaged.", run_id="run-test", max_steps=8):
         runner = AgentRunner(model, OrderDesk().registry(), telemetry.tracer(), max_steps)

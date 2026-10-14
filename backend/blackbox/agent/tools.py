@@ -46,6 +46,15 @@ def _seed_orders() -> dict[int, dict[str, Any]]:
              "customer_email": "mia.chen@example.com", "shipping_address": "301 Pine Street, Lakeside"},
         45: {"status": "shipped", "total": 75.00, "days_since_delivery": None,
              "customer_email": "leo.silva@example.com", "shipping_address": "77 Cedar Court, Oakdale"},
+        # boundary cases for the evaluation dataset
+        46: {"status": "delivered", "total": 20.00, "days_since_delivery": 3,
+             "customer_email": "zoe.park@example.com", "shipping_address": "4 Willow Way, Fairview"},
+        47: {"status": "delivered", "total": 100.00, "days_since_delivery": 29,  # exactly at the limit, inside the window
+             "customer_email": "omar.reyes@example.com", "shipping_address": "18 Maple Drive, Kingston"},
+        48: {"status": "delivered", "total": 100.01, "days_since_delivery": 5,  # one cent over the limit
+             "customer_email": "ines.novak@example.com", "shipping_address": "260 Ash Avenue, Brookfield"},
+        49: {"status": "shipped", "total": 30.00, "days_since_delivery": None,
+             "customer_email": "tara.ito@example.com", "shipping_address": "52 Spruce Lane, Hillcrest"},
     }
 
 

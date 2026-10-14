@@ -13,6 +13,19 @@ dependencies = [
     "pytest==9.1.1",
 ]
 
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# Source lives in backend/. Installing the project (editable) puts `blackbox` on the path, so
+# `python -m blackbox.evals` and `uvicorn --factory blackbox.api.main:create_app` work from any folder.
+[tool.setuptools.packages.find]
+where = ["backend"]
+include = ["blackbox*"]
+
+[tool.setuptools.package-data]
+"blackbox.evals" = ["datasets/*.json"]
+
 [tool.pytest.ini_options]
 pythonpath = ["backend"]
 testpaths = ["backend/tests"]

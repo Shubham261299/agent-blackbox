@@ -14,6 +14,81 @@ class RunRequest(BaseModel):
     scenario: str | None = None
 
 
+class CheckResult(BaseModel):
+    metric: str
+    # None means "informational, not a pass/fail question" (latency).
+    passed: bool | None
+    score: float | None = None
+    reason: str
+    span_ids: list[str] = Field(default_factory=list)  # spans the finding is about
+    details: dict[str, Any] = Field(default_factory=dict)
+    gating: bool = False  # a run passes when every gating check passes
+
+
+class EvalCaseResult(BaseModel):
+    case_id: str
+    category: str
+    task: str
+    run_id: str
+    run_status: RunStatus
+    passed: bool
+    duration_ms: float | None = None
+    note: dict[str, Any] | None = None  # validation batches: which fault, which checks were expected to fail
+    checks: list[CheckResult] = Field(default_factory=list)
+
+
+EvalKind = Literal["benchmark", "reference", "validation"]
+
+
+class EvalRunSummary(BaseModel):
+    eval_id: str
+    kind: EvalKind
+    model: str
+    dataset_version: str
+    dataset_hash: str
+    seed: int | None = None
+    started_at: str
+    finished_at: str | None = None
+    status: Literal["running", "done", "error"]
+    n_cases: int = 0
+    n_passed: int = 0
+
+
+class MetricSummary(BaseModel):
+    metric: str
+    gating: bool
+    passed: int
+    total: int
+    mean_score: float | None = None
+
+
+class CategorySummary(BaseModel):
+    category: str
+    passed: int
+    total: int
+
+
+class EvalReport(EvalRunSummary):
+    cases: list[EvalCaseResult] = Field(default_factory=list)
+    metrics: list[MetricSummary] = Field(default_factory=list)
+    categories: list[CategorySummary] = Field(default_factory=list)
+
+
+class RunEvaluation(BaseModel):
+    """Checks for one run. `case_id`/`eval_id` are set when the run belonged to a stored evaluation;
+    otherwise only the checks that need no expectations are computed on the fly."""
+
+    run_id: str
+    eval_id: str | None = None
+    case_id: str | None = None
+    stored: bool
+    checks: list[CheckResult]
+
+
+class StartEvalRequest(BaseModel):
+    mode: Literal["reference", "faults"] = "reference"
+
+
 class ScenarioInfo(BaseModel):
     name: str
     description: str

@@ -3,7 +3,16 @@ import sqlite3
 import threading
 
 from blackbox.config import ensure_parent_dir
-from blackbox.models import RunRecord, SpanRecord
+from blackbox.models import (
+    CategorySummary,
+    CheckResult,
+    EvalCaseResult,
+    EvalReport,
+    EvalRunSummary,
+    MetricSummary,
+    RunRecord,
+    SpanRecord,
+)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
@@ -33,6 +42,42 @@ CREATE TABLE IF NOT EXISTS spans (
     events         TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_spans_run ON spans(run_id, start_time_ns);
+CREATE TABLE IF NOT EXISTS eval_runs (
+    eval_id         TEXT PRIMARY KEY,
+    kind            TEXT NOT NULL,
+    model           TEXT NOT NULL,
+    dataset_version TEXT NOT NULL,
+    dataset_hash    TEXT NOT NULL,
+    seed            INTEGER,
+    started_at      TEXT NOT NULL,
+    finished_at     TEXT,
+    status          TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS eval_cases (
+    eval_id     TEXT NOT NULL,
+    case_id     TEXT NOT NULL,
+    category    TEXT NOT NULL,
+    task        TEXT NOT NULL,
+    run_id      TEXT NOT NULL,
+    run_status  TEXT NOT NULL,
+    passed      INTEGER NOT NULL,
+    duration_ms REAL,
+    note        TEXT,
+    PRIMARY KEY (eval_id, case_id)
+);
+CREATE INDEX IF NOT EXISTS idx_eval_cases_run ON eval_cases(run_id);
+CREATE TABLE IF NOT EXISTS eval_results (
+    eval_id  TEXT NOT NULL,
+    case_id  TEXT NOT NULL,
+    metric   TEXT NOT NULL,
+    passed   INTEGER,
+    score    REAL,
+    gating   INTEGER NOT NULL,
+    reason   TEXT NOT NULL,
+    span_ids TEXT NOT NULL,
+    details  TEXT NOT NULL,
+    PRIMARY KEY (eval_id, case_id, metric)
+);
 """
 
 
@@ -110,3 +155,130 @@ class Store:
             })
             for r in rows
         ]
+
+    # ---- test harness only ---------------------------------------------------------
+    def delete_span(self, span_id: str) -> None:
+        """Used by the validation batch to plant a 'missing span' fault. Not used in normal operation."""
+        with self._lock:
+            self._db.execute("DELETE FROM spans WHERE span_id=?", (span_id,))
+            self._db.commit()
+
+    # ---- evaluations ---------------------------------------------------------------
+    def create_eval_run(self, summary: EvalRunSummary) -> None:
+        with self._lock:
+            self._db.execute(
+                "INSERT INTO eval_runs (eval_id, kind, model, dataset_version, dataset_hash, seed, started_at,"
+                " finished_at, status) VALUES (?,?,?,?,?,?,?,?,?)",
+                (summary.eval_id, summary.kind, summary.model, summary.dataset_version, summary.dataset_hash,
+                 summary.seed, summary.started_at, summary.finished_at, summary.status),
+            )
+            self._db.commit()
+
+    def finish_eval_run(self, eval_id: str, status: str, finished_at: str) -> None:
+        with self._lock:
+            self._db.execute("UPDATE eval_runs SET status=?, finished_at=? WHERE eval_id=?", (status, finished_at, eval_id))
+            self._db.commit()
+
+    def save_eval_case(self, eval_id: str, result: EvalCaseResult) -> None:
+        with self._lock:
+            self._db.execute(
+                "INSERT OR REPLACE INTO eval_cases (eval_id, case_id, category, task, run_id, run_status, passed,"
+                " duration_ms, note) VALUES (?,?,?,?,?,?,?,?,?)",
+                (eval_id, result.case_id, result.category, result.task, result.run_id, result.run_status,
+                 int(result.passed), result.duration_ms, json.dumps(result.note) if result.note else None),
+            )
+            self._db.executemany(
+                "INSERT OR REPLACE INTO eval_results (eval_id, case_id, metric, passed, score, gating, reason,"
+                " span_ids, details) VALUES (?,?,?,?,?,?,?,?,?)",
+                [(eval_id, result.case_id, c.metric, None if c.passed is None else int(c.passed), c.score,
+                  int(c.gating), c.reason, json.dumps(c.span_ids), json.dumps(c.details)) for c in result.checks],
+            )
+            self._db.commit()
+
+    @staticmethod
+    def _summary_from_row(row: sqlite3.Row) -> EvalRunSummary:
+        return EvalRunSummary(
+            eval_id=row["eval_id"], kind=row["kind"], model=row["model"], dataset_version=row["dataset_version"],
+            dataset_hash=row["dataset_hash"], seed=row["seed"], started_at=row["started_at"],
+            finished_at=row["finished_at"], status=row["status"],
+            n_cases=row["n_cases"] or 0, n_passed=row["n_passed"] or 0,
+        )
+
+    _EVAL_SELECT = (
+        "SELECT r.*, (SELECT COUNT(*) FROM eval_cases c WHERE c.eval_id = r.eval_id) AS n_cases,"
+        " (SELECT COALESCE(SUM(c.passed), 0) FROM eval_cases c WHERE c.eval_id = r.eval_id) AS n_passed"
+        " FROM eval_runs r"
+    )
+
+    def list_eval_runs(self, limit: int = 50) -> list[EvalRunSummary]:
+        with self._lock:
+            rows = self._db.execute(
+                f"{self._EVAL_SELECT} ORDER BY r.started_at DESC, r.rowid DESC LIMIT ?", (limit,)
+            ).fetchall()
+        return [self._summary_from_row(r) for r in rows]
+
+    @staticmethod
+    def _check_from_row(r: sqlite3.Row) -> CheckResult:
+        return CheckResult(
+            metric=r["metric"], passed=None if r["passed"] is None else bool(r["passed"]), score=r["score"],
+            reason=r["reason"], span_ids=json.loads(r["span_ids"]), details=json.loads(r["details"]),
+            gating=bool(r["gating"]),
+        )
+
+    def get_eval_report(self, eval_id: str) -> EvalReport | None:
+        with self._lock:
+            head = self._db.execute(f"{self._EVAL_SELECT} WHERE r.eval_id=?", (eval_id,)).fetchone()
+            if head is None:
+                return None
+            cases = self._db.execute("SELECT * FROM eval_cases WHERE eval_id=? ORDER BY rowid", (eval_id,)).fetchall()
+            results = self._db.execute("SELECT * FROM eval_results WHERE eval_id=? ORDER BY rowid", (eval_id,)).fetchall()
+
+        by_case: dict[str, list[CheckResult]] = {}
+        for r in results:
+            by_case.setdefault(r["case_id"], []).append(self._check_from_row(r))
+        case_results = [
+            EvalCaseResult(
+                case_id=c["case_id"], category=c["category"], task=c["task"], run_id=c["run_id"],
+                run_status=c["run_status"], passed=bool(c["passed"]), duration_ms=c["duration_ms"],
+                note=json.loads(c["note"]) if c["note"] else None, checks=by_case.get(c["case_id"], []),
+            )
+            for c in cases
+        ]
+
+        order = ["task_completion", "policy_compliance", "tool_correctness", "argument_correctness",
+                 "step_efficiency", "trace_completeness", "latency"]
+        grouped: dict[str, list[CheckResult]] = {}
+        for case in case_results:
+            for check in case.checks:
+                grouped.setdefault(check.metric, []).append(check)
+        metrics = []
+        for name in sorted(grouped, key=lambda m: order.index(m) if m in order else len(order)):
+            checks = grouped[name]
+            decided = [x for x in checks if x.passed is not None]
+            scores = [x.score for x in checks if x.score is not None]
+            metrics.append(MetricSummary(
+                metric=name, gating=checks[0].gating, passed=sum(1 for x in decided if x.passed), total=len(decided),
+                mean_score=(sum(scores) / len(scores)) if scores else None,
+            ))
+        categories: dict[str, list[bool]] = {}
+        for case in case_results:
+            categories.setdefault(case.category, []).append(case.passed)
+        return EvalReport(
+            **self._summary_from_row(head).model_dump(),
+            cases=case_results, metrics=metrics,
+            categories=[CategorySummary(category=k, passed=sum(v), total=len(v)) for k, v in categories.items()],
+        )
+
+    def find_eval_case_for_run(self, run_id: str) -> tuple[str, str] | None:
+        with self._lock:
+            row = self._db.execute(
+                "SELECT eval_id, case_id FROM eval_cases WHERE run_id=? ORDER BY rowid DESC LIMIT 1", (run_id,)
+            ).fetchone()
+        return (row["eval_id"], row["case_id"]) if row else None
+
+    def get_case_checks(self, eval_id: str, case_id: str) -> list[CheckResult]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT * FROM eval_results WHERE eval_id=? AND case_id=? ORDER BY rowid", (eval_id, case_id)
+            ).fetchall()
+        return [self._check_from_row(r) for r in rows]
