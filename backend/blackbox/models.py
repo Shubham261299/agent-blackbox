@@ -12,6 +12,7 @@ class RunRequest(BaseModel):
     model: Literal["scripted", "ollama"] = "scripted"
     # Scripted model only: which canned conversation to replay.
     scenario: str | None = None
+    variant: str = "baseline"  # agent configuration preset (blackbox.agent.config.PRESETS)
 
 
 class CheckResult(BaseModel):
@@ -47,6 +48,7 @@ class EvalRunSummary(BaseModel):
     dataset_version: str
     dataset_hash: str
     seed: int | None = None
+    variant: str = "baseline"  # which agent configuration produced the runs
     started_at: str
     finished_at: str | None = None
     status: Literal["running", "done", "error"]
@@ -109,6 +111,7 @@ class RunEvaluation(BaseModel):
 
 class StartEvalRequest(BaseModel):
     mode: Literal["reference", "faults", "faultlab"] = "reference"
+    variant: str = "baseline"
 
 
 class ScenarioInfo(BaseModel):
@@ -130,6 +133,7 @@ class RunRecord(BaseModel):
     duration_ms: float | None = None
     final_answer: str | None = None
     error: str | None = None
+    variant: str = "baseline"
 
 
 class SpanRecord(BaseModel):
@@ -149,3 +153,76 @@ class SpanRecord(BaseModel):
     status_message: str | None = None
     attributes: dict[str, Any] = Field(default_factory=dict)
     events: list[dict[str, Any]] = Field(default_factory=list)
+
+
+# ---- before/after comparison of two stored evaluations ------------------------------------------------------
+CaseChangeKind = Literal["fixed", "broken", "still_passing", "still_failing", "only_baseline", "only_candidate"]
+
+
+class CaseChange(BaseModel):
+    """One case (or, for a failure-lab comparison, one planted fault) on both sides. `passed` means the gating
+    checks passed; for a lab it means the fault had no effect on the run."""
+
+    case_id: str
+    category: str
+    task: str
+    change: CaseChangeKind
+    baseline_passed: bool | None = None
+    candidate_passed: bool | None = None
+    baseline_run_id: str | None = None
+    candidate_run_id: str | None = None
+    baseline_failed_checks: list[str] = Field(default_factory=list)
+    candidate_failed_checks: list[str] = Field(default_factory=list)
+    baseline_effect: str | None = None  # failure lab only: run_failed / gating_failed / silent / no_effect
+    candidate_effect: str | None = None
+    baseline_duration_ms: float | None = None
+    candidate_duration_ms: float | None = None
+    baseline_tool_calls: int | None = None
+    candidate_tool_calls: int | None = None
+    baseline_retries: int | None = None
+    candidate_retries: int | None = None
+
+
+class MetricChange(BaseModel):
+    metric: str
+    gating: bool
+    baseline_passed: int
+    baseline_total: int
+    candidate_passed: int
+    candidate_total: int
+
+
+class CategoryChange(BaseModel):
+    category: str
+    total: int
+    baseline_passed: int
+    candidate_passed: int
+
+
+class CostTotals(BaseModel):
+    """What it took, over the cases both sides ran. Tokens are None when any run did not measure them."""
+
+    cases: int
+    tool_calls: int
+    model_calls: int
+    retries: int
+    total_duration_ms: float
+    median_duration_ms: float | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+
+
+class Comparison(BaseModel):
+    kind: EvalKind
+    baseline: EvalRunSummary
+    candidate: EvalRunSummary
+    matched: int  # cases present on both sides; the counts below only use these
+    fixed: int
+    broken: int
+    still_passing: int
+    still_failing: int
+    cases: list[CaseChange]
+    metrics: list[MetricChange]
+    categories: list[CategoryChange]
+    baseline_cost: CostTotals
+    candidate_cost: CostTotals

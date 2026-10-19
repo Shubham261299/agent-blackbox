@@ -6,12 +6,16 @@ Modes:
   faults     each planted fault through its base case  -> kind "validation" (instant, proves the checks)
   faultlab         infrastructure faults planted in one run, scripted model -> kind "faultlab" (instant)
   faultlab-ollama  the same, with the real model                          -> kind "faultlab" (a few minutes)
+
+Every mode except `faults` takes an agent configuration (a variant), so the same cases can be run on the baseline
+agent and on a fixed one and compared. `faults` always uses the baseline: it validates the checks, not an agent.
 """
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Literal
 
+from blackbox.agent.config import AgentConfig
 from blackbox.agent.service import RunService
 from blackbox.evals.cases import Dataset, EvalCase
 from blackbox.evals.checks import case_passed, evaluate_case
@@ -40,8 +44,8 @@ def _now() -> str:
 
 def run_case(service: RunService, model: ModelClient, case: EvalCase, *, max_steps: int | None = None,
              plant: Plant | None = None, note: dict | None = None, case_id: str | None = None,
-             injector: FaultInjector | None = None) -> EvalCaseResult:
-    run = service.run_sync(model, case.task, max_steps, injector)
+             injector: FaultInjector | None = None, config: AgentConfig | None = None) -> EvalCaseResult:
+    run = service.run_sync(model, case.task, max_steps, injector, config)
     if plant:
         plant(service.store, run.run_id)
     traj = build_trajectory(run, service.store.get_spans(run.run_id))
@@ -58,11 +62,13 @@ def _model_label(service: RunService, mode: Mode) -> str:
             "faultlab-ollama": f"ollama:{service.settings.ollama_model}"}[mode]
 
 
-def prepare_evaluation(service: RunService, dataset: Dataset, mode: Mode) -> EvalRunSummary:
+def prepare_evaluation(service: RunService, dataset: Dataset, mode: Mode, config: AgentConfig | None = None) -> EvalRunSummary:
+    if config and config.name != "baseline" and mode == "faults":
+        raise ValueError("the 'faults' mode validates the checks on scripted runs and always uses the baseline agent")
     summary = EvalRunSummary(
         eval_id=f"eval-{uuid.uuid4().hex[:8]}", kind=KIND[mode], model=_model_label(service, mode),
         dataset_version=dataset.version, dataset_hash=dataset.content_hash, seed=SEED if mode in REAL_MODEL_MODES else None,
-        started_at=_now(), status="running",
+        variant=config.name if config else "baseline", started_at=_now(), status="running",
     )
     service.store.create_eval_run(summary)
     return summary
@@ -82,7 +88,8 @@ def _fault_result(service: RunService, dataset: Dataset, fault: Fault) -> EvalCa
 
 
 def execute_evaluation(service: RunService, dataset: Dataset, mode: Mode, eval_id: str,
-                       case_ids: list[str] | None = None, progress: Progress | None = None) -> None:
+                       case_ids: list[str] | None = None, progress: Progress | None = None,
+                       config: AgentConfig | None = None) -> None:
     store = service.store
     try:
         def real_model() -> ModelClient:
@@ -94,7 +101,7 @@ def execute_evaluation(service: RunService, dataset: Dataset, mode: Mode, eval_i
         elif mode in ("faultlab", "faultlab-ollama"):
             reference = dataset.case("N1")
             results = run_fault_lab(service, dataset,
-                                    real_model if mode == "faultlab-ollama" else lambda: reference_model(reference))
+                                    real_model if mode == "faultlab-ollama" else lambda: reference_model(reference), config)
         else:
             wanted = [c for c in dataset.cases if not case_ids or c.id in case_ids]
             model_for: Callable[[EvalCase], ModelClient] = (
@@ -102,7 +109,7 @@ def execute_evaluation(service: RunService, dataset: Dataset, mode: Mode, eval_i
                                         service.settings.ollama_timeout_s, seed=SEED))
                 if mode == "ollama" else reference_model
             )
-            results = (run_case(service, model_for(c), c) for c in wanted)
+            results = (run_case(service, model_for(c), c, config=config) for c in wanted)
         for result in results:
             store.save_eval_case(eval_id, result)
             if progress:
@@ -114,7 +121,7 @@ def execute_evaluation(service: RunService, dataset: Dataset, mode: Mode, eval_i
 
 
 def run_evaluation(service: RunService, dataset: Dataset, mode: Mode, case_ids: list[str] | None = None,
-                   progress: Progress | None = None) -> str:
-    summary = prepare_evaluation(service, dataset, mode)
-    execute_evaluation(service, dataset, mode, summary.eval_id, case_ids, progress)
+                   progress: Progress | None = None, config: AgentConfig | None = None) -> str:
+    summary = prepare_evaluation(service, dataset, mode, config)
+    execute_evaluation(service, dataset, mode, summary.eval_id, case_ids, progress, config)
     return summary.eval_id

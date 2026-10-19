@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS runs (
     started_at   TEXT NOT NULL,
     duration_ms  REAL,
     final_answer TEXT,
-    error        TEXT
+    error        TEXT,
+    variant      TEXT NOT NULL DEFAULT 'baseline'
 );
 CREATE TABLE IF NOT EXISTS spans (
     span_id        TEXT PRIMARY KEY,
@@ -52,7 +53,8 @@ CREATE TABLE IF NOT EXISTS eval_runs (
     seed            INTEGER,
     started_at      TEXT NOT NULL,
     finished_at     TEXT,
-    status          TEXT NOT NULL
+    status          TEXT NOT NULL,
+    variant         TEXT NOT NULL DEFAULT 'baseline'
 );
 CREATE TABLE IF NOT EXISTS eval_cases (
     eval_id     TEXT NOT NULL,
@@ -106,6 +108,16 @@ class Store:
             if db_path != ":memory:":
                 self._db.execute("PRAGMA journal_mode=WAL")
             self._db.executescript(SCHEMA)
+            self._add_missing_columns()
+
+    def _add_missing_columns(self) -> None:
+        """Databases made before a column existed keep working: CREATE TABLE IF NOT EXISTS does not add columns, so
+        add them here. Every row written before variants existed came from the baseline agent, hence the default."""
+        for table, column in (("runs", "variant"), ("eval_runs", "variant")):
+            have = {row[1] for row in self._db.execute(f"PRAGMA table_info({table})")}
+            if column not in have:
+                self._db.execute(f"ALTER TABLE {table} ADD COLUMN {column} TEXT NOT NULL DEFAULT 'baseline'")
+        self._db.commit()
 
     def close(self) -> None:
         with self._lock:
@@ -115,10 +127,10 @@ class Store:
     def create_run(self, run: RunRecord) -> None:
         with self._lock:
             self._db.execute(
-                "INSERT INTO runs (run_id, task, model, status, trace_id, started_at, duration_ms, final_answer, error)"
-                " VALUES (?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO runs (run_id, task, model, status, trace_id, started_at, duration_ms, final_answer, error,"
+                " variant) VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (run.run_id, run.task, run.model, run.status, run.trace_id, run.started_at,
-                 run.duration_ms, run.final_answer, run.error),
+                 run.duration_ms, run.final_answer, run.error, run.variant),
             )
             self._db.commit()
 
@@ -197,9 +209,9 @@ class Store:
         with self._lock:
             self._db.execute(
                 "INSERT INTO eval_runs (eval_id, kind, model, dataset_version, dataset_hash, seed, started_at,"
-                " finished_at, status) VALUES (?,?,?,?,?,?,?,?,?)",
+                " finished_at, status, variant) VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (summary.eval_id, summary.kind, summary.model, summary.dataset_version, summary.dataset_hash,
-                 summary.seed, summary.started_at, summary.finished_at, summary.status),
+                 summary.seed, summary.started_at, summary.finished_at, summary.status, summary.variant),
             )
             self._db.commit()
 
@@ -228,7 +240,7 @@ class Store:
     def _summary_from_row(row: sqlite3.Row) -> EvalRunSummary:
         return EvalRunSummary(
             eval_id=row["eval_id"], kind=row["kind"], model=row["model"], dataset_version=row["dataset_version"],
-            dataset_hash=row["dataset_hash"], seed=row["seed"], started_at=row["started_at"],
+            dataset_hash=row["dataset_hash"], seed=row["seed"], variant=row["variant"], started_at=row["started_at"],
             finished_at=row["finished_at"], status=row["status"],
             n_cases=row["n_cases"] or 0, n_passed=row["n_passed"] or 0,
         )

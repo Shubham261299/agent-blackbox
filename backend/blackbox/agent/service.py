@@ -24,13 +24,14 @@ class RunService:
         self.telemetry = telemetry
         self._ollama_lock = threading.Lock()  # one local model in memory at a time (16 GB machine)
 
-    def create_run(self, model: ModelClient, task: str) -> RunRecord:
+    def create_run(self, model: ModelClient, task: str, config: AgentConfig | None = None) -> RunRecord:
         run = RunRecord(
             run_id=f"run-{uuid.uuid4().hex[:8]}",
             task=scrub_text(task),
             model=f"{model.provider}:{model.name}",
             status="running",
             started_at=datetime.now(UTC).isoformat(),
+            variant=config.name if config else "baseline",
         )
         self.store.create_run(run)
         return run
@@ -70,7 +71,7 @@ class RunService:
 
     def run_sync(self, model: ModelClient, task: str, max_steps: int | None = None,
                  injector: FaultInjector | None = None, config: AgentConfig | None = None) -> RunRecord:
-        run = self.create_run(model, task)
+        run = self.create_run(model, task, config)
         self.execute(run.run_id, model, task, max_steps, injector, config)
         finished = self.store.get_run(run.run_id)
         assert finished is not None

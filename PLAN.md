@@ -25,7 +25,7 @@
 - Decisions already taken: 24 golden cases (golden-v2 current), option B (only the order id of an address change is verified; keyed digest "option A" is a later extension), judged DeepEval subset of 6 on Day 7, qwen2.5:7b only.
 
 **How to run things (Windows, from the repo root; venv is `.venv`):**
-- Tests: `.venv\Scripts\python -m pytest` (307 backend, 1 needs Jaeger) and `cd frontend; npm test` (82), `npx tsc --noEmit`, `npm run build`.
+- Tests: `.venv\Scripts\python -m pytest` (325 backend, 1 needs Jaeger) and `cd frontend; npm test` (82), `npx tsc --noEmit`, `npm run build`.
 - API: `uvicorn --app-dir backend --factory blackbox.api.main:create_app --port 8000`; UI: `cd frontend; npm run dev` (port 5173).
 - Jaeger: `docker compose up -d` (container `jaeger`, UI 16686; no restart policy, start it again after a Docker restart).
 - Evaluations: `python -m blackbox.evals run --mode reference|faults|ollama|faultlab|faultlab-ollama`. Real-model runs take minutes on CPU.
@@ -103,7 +103,8 @@ Rough target, ordered by what the audience sees first. A day is done only when i
 - [x] Stage 1: `holdout-v1` (8 cases) written before tuning; baseline on it 5/8 (eval-286fe069)
 - [x] Stage 2: `AgentConfig` + presets `baseline`/`resilient`; retries with a limit, runtime contract enforcement, injector `persistent` option; 296 backend tests, mutation-checked
 - [x] Stage 3: guidance v2 (prompt + tool descriptions), presets `guided`/`full`, v1 pinned, v2 frozen before any real run; 307 backend tests
-- [ ] Fix toggle (stages 4-7 remain): retry with a limit and a timeout for tool/model errors; runtime enforcement of the tool output contracts; tool descriptions and prompt for "look the order up first" and "ask instead of invent"
+- [x] Stage 4: `variant` on runs and evals (with DB migration), `--variant`, `compare` (logic, API, CLI) with refusals, localizer tier 4 "retried"; 325 backend tests
+- [ ] Stage 5 real runs (running 2026-10-19), 6 UI, 7 docs remain: retry with a limit and a timeout for tool/model errors; runtime enforcement of the tool output contracts; tool descriptions and prompt for "look the order up first" and "ask instead of invent"
 - [ ] Baseline vs fixed over the 24 cases (and the four lab faults), same dataset hash, model and seed; repeats where CPU time allows
 - [ ] Regression rate (passed before, fails now), pass rate, cost in steps and seconds
 - [ ] Comparison view in the UI

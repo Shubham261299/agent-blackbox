@@ -7,6 +7,7 @@ the spans that failed checks name, and the tool-output contract. Signals, strong
   tier 1  spans named by a failed gating check (policy, task completion)
   tier 2  spans named by a failed reported check
   tier 3  spans with error status
+  tier 4  spans that had to retry before they succeeded (found by the event's name, never its text)
 
 The run span is a consequence, not a cause: any signal naming it is dropped when something beneath it is suspect.
 
@@ -42,6 +43,11 @@ def locate(traj: Trajectory, checks: list[CheckResult]) -> list[Suspect]:
     below_root = [s for s in errored if s.parent_span_id is not None]
     for span in below_root or errored:  # the run span only counts when nothing beneath it failed
         note(span.span_id, 3, "error status", span.status_message or "the span ended with an error")
+
+    for span in traj.spans:
+        retries = [e for e in span.events if e.get("name") == "retry"]
+        if retries and span.parent_span_id is not None:
+            note(span.span_id, 4, "retried", f"needed {len(retries)} {'retry' if len(retries) == 1 else 'retries'} before it went through")
 
     # Anything naming the run span only says the run failed; that is the consequence. Keep it as a suspect
     # only when nothing beneath it is suspect.

@@ -8,6 +8,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any
 
+from blackbox.agent.config import AgentConfig
 from blackbox.agent.service import RunService
 from blackbox.evals.cases import Dataset, EvalCase
 from blackbox.evals.checks import case_passed, evaluate_case
@@ -93,16 +94,17 @@ def _warm_up(model: ModelClient) -> None:
         pass  # the runs that follow record the failure properly
 
 
-def run_fault_lab(service: RunService, dataset: Dataset, new_model: Callable[[], ModelClient]) -> Iterator[EvalCaseResult]:
+def run_fault_lab(service: RunService, dataset: Dataset, new_model: Callable[[], ModelClient],
+                  config: AgentConfig | None = None) -> Iterator[EvalCaseResult]:
     case = dataset.case(BASE_CASE)
     _warm_up(new_model())
-    control_run = service.run_sync(new_model(), case.task)
+    control_run = service.run_sync(new_model(), case.task, config=config)
     control_traj, control_checks = _evaluate(service, control_run, case)
     control = _summary(control_run, control_traj, control_checks)
 
     for lab in LAB_FAULTS:
         injector = FaultInjector([lab.spec])
-        run = service.run_sync(new_model(), case.task, injector=injector)
+        run = service.run_sync(new_model(), case.task, injector=injector, config=config)
         traj, checks = _evaluate(service, run, case)
         suspects = locate(traj, checks)
         origin = injector.faults[0].origin_span_id

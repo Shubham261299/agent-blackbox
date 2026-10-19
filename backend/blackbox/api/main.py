@@ -5,10 +5,12 @@ from contextlib import asynccontextmanager
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from opentelemetry.sdk.trace.export import SpanExporter
 
+from blackbox.agent.config import AgentConfig, preset
 from blackbox.agent.service import RunService
 from blackbox.config import Settings, get_settings
 from blackbox.evals.cases import load_dataset
 from blackbox.evals.checks import evaluate_generic
+from blackbox.evals.compare import ComparisonError, compare
 from blackbox.evals.localize import locate
 from blackbox.evals.runner import execute_evaluation, prepare_evaluation
 from blackbox.evals.trajectory import build_trajectory
@@ -16,6 +18,7 @@ from blackbox.llm.base import ModelClient
 from blackbox.llm.ollama_client import OllamaClient
 from blackbox.llm.scripted import SCENARIO_INFO, scripted_model
 from blackbox.models import (
+    Comparison,
     EvalReport,
     EvalRunSummary,
     RunEvaluation,
@@ -30,6 +33,13 @@ from blackbox.store.db import Store
 from blackbox.telemetry.setup import Telemetry
 
 ModelFactory = Callable[[RunRequest, Settings], ModelClient]
+
+
+def agent_config(variant: str) -> AgentConfig:
+    try:
+        return preset(variant)
+    except KeyError as exc:
+        raise HTTPException(status_code=422, detail=exc.args[0]) from None
 
 
 def build_model(request: RunRequest, settings: Settings) -> ModelClient:
@@ -74,8 +84,9 @@ def create_app(
             model = model_factory(request, settings)
         except KeyError as exc:
             raise HTTPException(status_code=422, detail=f"unknown scenario {exc.args[0]!r}") from None
-        run = service.create_run(model, request.task)
-        background.add_task(service.execute, run.run_id, model, request.task)
+        config = agent_config(request.variant)
+        run = service.create_run(model, request.task, config)
+        background.add_task(service.execute, run.run_id, model, request.task, None, None, config)
         return run
 
     @app.get("/runs", response_model=list[RunRecord])
@@ -124,6 +135,18 @@ def create_app(
     def list_evals(limit: int = 50) -> list[EvalRunSummary]:
         return store.list_eval_runs(limit)
 
+    @app.get("/evals/compare", response_model=Comparison)
+    def compare_evals(baseline: str, candidate: str) -> Comparison:
+        """Before/after of two stored evaluations. 422 (with the reason) when they cannot be fairly compared."""
+        reports = [store.get_eval_report(eval_id) for eval_id in (baseline, candidate)]
+        missing = [eval_id for eval_id, r in zip((baseline, candidate), reports) if r is None]
+        if missing:
+            raise HTTPException(status_code=404, detail=f"evaluation not found: {', '.join(missing)}")
+        try:
+            return compare(store, reports[0], reports[1])  # type: ignore[arg-type]
+        except ComparisonError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
+
     @app.get("/evals/{eval_id}", response_model=EvalReport)
     def get_eval(eval_id: str) -> EvalReport:
         report = store.get_eval_report(eval_id)
@@ -136,8 +159,12 @@ def create_app(
         """Scripted batches only (instant). Real-model benchmarks take minutes: use the CLI,
         `python -m blackbox.evals run --mode ollama`."""
         dataset = load_dataset()
-        summary = prepare_evaluation(service, dataset, request.mode)
-        background.add_task(execute_evaluation, service, dataset, request.mode, summary.eval_id)
+        config = agent_config(request.variant)
+        try:
+            summary = prepare_evaluation(service, dataset, request.mode, config)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
+        background.add_task(execute_evaluation, service, dataset, request.mode, summary.eval_id, None, None, config)
         return summary
 
     return app
