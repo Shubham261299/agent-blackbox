@@ -32,7 +32,15 @@ class FaultSpec:
     kind: FaultKind
     tool: str | None = None  # the tool, for tool faults
     occurrence: int = 1  # the n-th call of that tool, or the n-th model call (n-th tool-requesting reply for wrong_tool)
-    params: Mapping[str, Any] = field(default_factory=dict)
+    params: Mapping[str, Any] = field(default_factory=dict)  # "persistent": True fires on every call from `occurrence` on
+
+    @property
+    def persistent(self) -> bool:
+        return bool(self.params.get("persistent", False))
+
+    def matches(self, n: int) -> bool:
+        """Does the n-th call of the tool (or the model) trigger this fault?"""
+        return n >= self.occurrence if self.persistent else n == self.occurrence
 
     def describe(self) -> str:
         where = f"{self.tool} call {self.occurrence}" if self.tool else f"model call {self.occurrence}"
@@ -86,7 +94,7 @@ class FaultInjector:
             self._mark_wrong_tool_origin(spec.name, kwargs)
             for fault in self.faults:
                 s = fault.spec
-                if s.tool != spec.name or s.occurrence != n or fault.fired:
+                if s.tool != spec.name or not s.matches(n) or (fault.fired and not s.persistent):
                     continue
                 if s.kind == "tool_timeout":
                     self._fire(fault)
@@ -108,7 +116,8 @@ class FaultInjector:
                 fault.fired = True
 
     def _fire(self, fault: FiredFault) -> None:
-        fault.origin_span_id = _current_span_id()
+        if fault.origin_span_id is None:  # a persistent fault keeps pointing at the first span it hit
+            fault.origin_span_id = _current_span_id()
         fault.fired = True
 
     # ---- model seam --------------------------------------------------------------
@@ -118,7 +127,8 @@ class FaultInjector:
     def _on_model_call(self, inner: ModelClient, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> ModelResponse:
         self._model_calls += 1
         for fault in self.faults:
-            if fault.spec.kind == "model_error" and fault.spec.occurrence == self._model_calls and not fault.fired:
+            s = fault.spec
+            if s.kind == "model_error" and s.matches(self._model_calls) and (s.persistent or not fault.fired):
                 self._fire(fault)
                 raise ModelUnavailableError(str(fault.spec.params.get("message", "model backend unavailable: connection refused")))
         response = inner.chat(messages, tools)

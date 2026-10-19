@@ -5,6 +5,7 @@ import time
 import uuid
 from datetime import UTC, datetime
 
+from blackbox.agent.config import AgentConfig
 from blackbox.agent.loop import AgentResult, AgentRunner
 from blackbox.agent.tools import OrderDesk
 from blackbox.config import Settings
@@ -35,7 +36,7 @@ class RunService:
         return run
 
     def execute(self, run_id: str, model: ModelClient, task: str, max_steps: int | None = None,
-                injector: FaultInjector | None = None) -> None:
+                injector: FaultInjector | None = None, config: AgentConfig | None = None) -> None:
         started = time.perf_counter()
         lock = self._ollama_lock if model.provider == "ollama" else None
         if lock:
@@ -44,7 +45,7 @@ class RunService:
             tools = OrderDesk().registry()
             if injector:
                 tools, model = injector.wrap_tools(tools), injector.wrap_model(model)
-            runner = AgentRunner(model, tools, self.telemetry.tracer(), max_steps or self.settings.max_agent_steps)
+            runner = AgentRunner(model, tools, self.telemetry.tracer(), max_steps or self.settings.max_agent_steps, config)
             result = runner.run(run_id, task)
         except Exception as exc:  # defensive: AgentRunner.run already converts agent errors into a result
             result = AgentResult("error", None, f"{type(exc).__name__}: {exc}", None, 0)
@@ -68,9 +69,9 @@ class RunService:
         )
 
     def run_sync(self, model: ModelClient, task: str, max_steps: int | None = None,
-                 injector: FaultInjector | None = None) -> RunRecord:
+                 injector: FaultInjector | None = None, config: AgentConfig | None = None) -> RunRecord:
         run = self.create_run(model, task)
-        self.execute(run.run_id, model, task, max_steps, injector)
+        self.execute(run.run_id, model, task, max_steps, injector, config)
         finished = self.store.get_run(run.run_id)
         assert finished is not None
         return finished

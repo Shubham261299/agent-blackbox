@@ -76,7 +76,7 @@ These are what the design implies. If a result differs, the report says so; we d
 | `model_error` | run fails → run completes | same |
 | `malformed_output` | silent → still completes, one extra attempt, contract check passes | the bad reply is rejected and retried instead of reaching the model |
 | `wrong_tool` | unchanged | neither group addresses a wrong decision; if guidance helps here that is luck, say so |
-| a **persistent** timeout (fires every time) | run still ends, but in a bounded number of attempts | proves the limit is a limit |
+| a **persistent** timeout (fires every time) | exactly 3 attempts, then the agent is told and the run goes on (on the scripted model the script ignores the error, so the policy check then fails) | proves the limit is a limit; sharpened from "run still ends" while building stage 2, before any lab run |
 | Benchmark | some of the 5 gating failures fixed by `guided`; `resilient` changes nothing on the 24 cases (no infrastructure faults in them) | resilience cannot help where nothing infrastructure-shaped fails |
 | Regressions | at least one is plausible: a longer prompt can make a 7B model over-ask on cases that were fine | state the number whatever it is |
 | Cost | `resilient` costs nothing on a clean run; `guided` adds a little prompt processing time | |
@@ -134,3 +134,14 @@ A measured before/after table exists, stored from real runs: four variants on th
 - `holdout-v1` written first (8 cases: 2 normal, 3 ambiguous, 1 wrong-tool, 2 constraint; hash `8c7eb9ea4eb0`), before any fix existed. Tests (`test_eval_holdout.py`) check consistency, no overlap with golden-v2 ids or tasks, and that a scripted correct run of every case passes every check.
 - **Baseline on the held-out set** (`qwen2.5:7b`, temperature 0, seed 0): **5 of 8 passed both gating checks** (eval-286fe069, 190 s on CPU, including model load).
 - The 3 failures were triaged from the stored traces, and all are agent failures, not dataset errors: H2 changed an address without looking the order up; H4 ("refund part of order 47") invented a $30 amount and refunded it; H5 ("move my package to my office address") invented order id 12345 and tried to change its address. These are the same classes as the golden-set failures, so the held-out set can tell whether guidance generalizes.
+
+### Stage 2: resilience (done, 2026-10-19)
+
+- `AgentConfig` (`agent/config.py`) with presets `baseline` and `resilient` (2 retries, 0.05 s backoff, contracts enforced). `baseline` is the default and adds nothing to a trace: a test pins that a baseline trace has the same spans, no events, and no new attributes. The `guided` and `full` presets arrive with stage 3.
+- Retries (tool timeout, tool contract violation, and model errors: our own `ModelUnavailableError`, `ConnectionError`, `TimeoutError`, httpx transport errors). A domain `ToolError` and any other exception are never retried.
+- Every attempt happens inside the one span the model's request created, so the trace keeps one span per call. Each failed attempt is a `retry` event; the span carries `blackbox.agent.retry_count`; a non-baseline run span carries `blackbox.agent.variant`.
+- When tool retries are spent, the span ends in error and the model receives `{"error": ...}`; when model retries are spent the run ends, as before. A baseline timeout still ends the run.
+- Contract enforcement: a successful call whose output breaks its contract is rejected and retried; if every attempt breaks it, it becomes a failed call (error span), no longer a silent one.
+- Injector: `params={"persistent": True}` fires on every call from `occurrence` on; `origin_span_id` stays on the first span hit.
+- Tests: 20 new (`test_agent_resilience.py`); 296 backend in all, 1 skipped (Jaeger). Mutation-checked, all caught: tool retry off by one, model retry off by one, also retrying `ToolError`, contracts always on, baseline swallowing timeouts, retrying any model exception.
+- Not yet run on the real model; that is stage 5.

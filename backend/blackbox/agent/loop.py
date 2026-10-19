@@ -1,10 +1,14 @@
 import inspect
 import json
+import time
 from dataclasses import dataclass
 from typing import Any, Literal
 
 from opentelemetry.trace import Span, Status, StatusCode, Tracer
 
+from blackbox.agent.config import AgentConfig
+from blackbox.agent.contracts import contract_problems
+from blackbox.agent.errors import TRANSIENT_MODEL_ERRORS, ToolContractViolation, ToolTimeoutError
 from blackbox.agent.tools import ToolError, ToolSpec
 from blackbox.llm.base import ModelClient, ModelResponse, ToolRequest
 from blackbox.telemetry import attributes as attr
@@ -30,7 +34,9 @@ class AgentResult:
 
 
 class AgentRunner:
-    def __init__(self, model: ModelClient, tools: dict[str, ToolSpec], tracer: Tracer, max_steps: int = 8) -> None:
+    def __init__(self, model: ModelClient, tools: dict[str, ToolSpec], tracer: Tracer, max_steps: int = 8,
+                 config: AgentConfig | None = None) -> None:
+        self._config = config or AgentConfig()
         self._model = model
         self._tools = tools
         self._tracer = tracer
@@ -52,6 +58,8 @@ class AgentRunner:
                     attr.GEN_AI_PROVIDER: self._model.provider,
                     attr.GEN_AI_REQUEST_MODEL: self._model.name,
                     attr.AGENT_INPUT: task,
+                    # Only a non-baseline agent says so: a baseline trace is exactly what it was before variants existed.
+                    **({attr.AGENT_VARIANT: self._config.name} if self._config.name != "baseline" else {}),
                 },
             ) as root:
                 trace_id = format(root.get_span_context().trace_id, "032x")
@@ -91,7 +99,7 @@ class AgentRunner:
                 attr.MODEL_PROMPT: _serialize_messages(messages),
             },
         ) as span:
-            response = self._model.chat(messages, self._tool_schemas)
+            response = self._chat_with_retries(span, messages)
             span.set_attribute(attr.MODEL_COMPLETION, response.content)
             if response.tool_calls:
                 span.set_attribute(
@@ -119,13 +127,59 @@ class AgentRunner:
             },
         ) as span:
             try:
-                output = json.dumps(self._execute(call), default=str)
+                output = json.dumps(self._execute_with_retries(span, call), default=str)
                 span.set_status(Status(StatusCode.OK))
-            except ToolError as exc:  # expected failure: record it, tell the model, let it recover
+            except (ToolError, ToolContractViolation) as exc:  # expected failure: record it, tell the model, let it recover
                 _record_tool_failure(span, exc)
+                output = json.dumps({"error": str(exc)})
+            except ToolTimeoutError as exc:
+                if not self._config.retries:
+                    raise  # the baseline agent has no handling for infrastructure failures: the run ends
+                _record_tool_failure(span, exc)  # retries are spent: tell the model instead of killing the run
                 output = json.dumps({"error": str(exc)})
             span.set_attribute(attr.TOOL_OUTPUT, output)
         return {"role": "tool", "tool_name": call.name, "content": output}
+
+    def _execute_with_retries(self, span: Span, call: ToolRequest) -> dict[str, Any]:
+        """Retries only what a second try can fix: a timeout, or output that broke its contract. A ToolError is an
+        answer ("order not found"), so asking again would get the same one; the model decides what to do with it.
+        Every attempt happens inside the one tool span, so the trace still has one span per call the model made."""
+        retried = 0
+        while True:
+            try:
+                result = self._execute(call)
+                if self._config.enforce_contracts:
+                    problems = contract_problems(call.name, result)
+                    if problems:
+                        raise ToolContractViolation(f"{call.name} returned invalid output: {'; '.join(problems)}")
+                return result
+            except (ToolTimeoutError, ToolContractViolation) as exc:
+                if retried >= self._config.retries:
+                    raise
+                retried += 1
+                self._note_retry(span, retried, exc)
+
+    def _chat_with_retries(self, span: Span, messages: list[dict[str, Any]]) -> ModelResponse:
+        retried = 0
+        while True:
+            try:
+                return self._model.chat(messages, self._tool_schemas)
+            except TRANSIENT_MODEL_ERRORS as exc:
+                if retried >= self._config.retries:
+                    raise
+                retried += 1
+                self._note_retry(span, retried, exc)
+
+    def _note_retry(self, span: Span, retried: int, exc: Exception) -> None:
+        span.add_event(
+            "retry",
+            {"retry.attempt": retried, "exception.type": f"{type(exc).__module__}.{type(exc).__qualname__}",
+             "exception.message": str(exc)},
+            timestamp=now_ns(),
+        )
+        span.set_attribute(attr.RETRY_COUNT, retried)
+        if self._config.backoff_s:
+            time.sleep(self._config.backoff_s * retried)
 
     def _execute(self, call: ToolRequest) -> dict[str, Any]:
         spec = self._tools.get(call.name)
