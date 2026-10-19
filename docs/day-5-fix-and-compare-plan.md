@@ -145,3 +145,12 @@ A measured before/after table exists, stored from real runs: four variants on th
 - Injector: `params={"persistent": True}` fires on every call from `occurrence` on; `origin_span_id` stays on the first span hit.
 - Tests: 20 new (`test_agent_resilience.py`); 296 backend in all, 1 skipped (Jaeger). Mutation-checked, all caught: tool retry off by one, model retry off by one, also retrying `ToolError`, contracts always on, baseline swallowing timeouts, retrying any model exception.
 - Not yet run on the real model; that is stage 5.
+
+### Stage 3: guidance (done, 2026-10-19)
+
+- `agent/guidance.py` holds numbered versions of the system prompt and the tool descriptions. **v1 is the old text, pinned character for character by a test** (prompt, all four tool descriptions, the `order_id` parameter text), so Day 1-4 results stay reproducible. `AgentRunner(config=...)` picks the versions; with no config it sends exactly v1.
+- **v2 adds three general rules to the prompt** (first tool call for an order request is `lookup_order`; if the order number, amount or address is missing, ask and take no action; say plainly when no tool can do the request, and do not try a different action instead) and rewrites the four tool descriptions and the `order_id` / `amount` parameter text to say the same. Nothing else changes: tools behave identically.
+- **Presets:** `guided` (v2 prompt + v2 descriptions, no retries) and `full` (guidance + resilience). The two groups are independent in `AgentConfig`, so `prompt_version` and `tool_descriptions` can also be switched one at a time (tested).
+- **Anti-answer-key test:** the text v2 adds contains no seeded order id, no 999 or 12345, no concrete dollar amount, none of a list of case-specific words (cancel, password, email, manager, ...), and quotes no task from golden-v2 or holdout-v1.
+- **v2 is frozen before any real run.** It was written from the Day 3 failure classes only and has not been run on the real model. If it performs badly, that is the result. A later change would be a new, labelled version (v3) reported next to v2, never an edit to v2, so the held-out set stays an honest test.
+- Tests: 11 new (`test_agent_guidance.py`); 307 backend in all, 1 skipped. Mutation-checked, all caught: v1 prompt edited, v2 leaking a case word, v2 leaking an amount, prompt version ignored, tool descriptions ignored, v2 mutating the shared registry, v2 dropping the v1 rules.

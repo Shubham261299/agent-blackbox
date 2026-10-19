@@ -8,6 +8,7 @@ from opentelemetry.trace import Span, Status, StatusCode, Tracer
 
 from blackbox.agent.config import AgentConfig
 from blackbox.agent.contracts import contract_problems
+from blackbox.agent.guidance import system_prompt, with_descriptions
 from blackbox.agent.errors import TRANSIENT_MODEL_ERRORS, ToolContractViolation, ToolTimeoutError
 from blackbox.agent.tools import ToolError, ToolSpec
 from blackbox.llm.base import ModelClient, ModelResponse, ToolRequest
@@ -15,12 +16,7 @@ from blackbox.telemetry import attributes as attr
 from blackbox.telemetry.tracing import now_ns, start_span
 
 AGENT_NAME = "order-support-agent"
-SYSTEM_PROMPT = (
-    "You are an order support agent. Always look up an order before acting on it. "
-    "Before issuing any refund you MUST call check_refund_policy and only refund if it says eligible. "
-    "Never refund more than the policy allows. Use the tools; do not guess order details. "
-    "When finished, reply with a short confirmation for the customer."
-)
+SYSTEM_PROMPT = system_prompt("v1")  # the baseline prompt; the agent uses config.prompt_version
 _MAX_MESSAGE_CHARS = 2000  # per message, so the serialized prompt stays valid JSON (redaction relies on that)
 
 
@@ -38,10 +34,11 @@ class AgentRunner:
                  config: AgentConfig | None = None) -> None:
         self._config = config or AgentConfig()
         self._model = model
-        self._tools = tools
+        self._tools = with_descriptions(tools, self._config.tool_descriptions)
+        self._system_prompt = system_prompt(self._config.prompt_version)
         self._tracer = tracer
         self._max_steps = max_steps
-        self._tool_schemas = [t.schema() for t in tools.values()]
+        self._tool_schemas = [t.schema() for t in self._tools.values()]
 
     def run(self, run_id: str, task: str) -> AgentResult:
         trace_id: str | None = None
@@ -64,7 +61,7 @@ class AgentRunner:
             ) as root:
                 trace_id = format(root.get_span_context().trace_id, "032x")
                 messages: list[dict[str, Any]] = [
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": self._system_prompt},
                     {"role": "user", "content": task},
                 ]
                 for step in range(1, self._max_steps + 1):
