@@ -235,7 +235,7 @@ Done when:
 We will **not** claim:
 - anything from n=24 beyond "n of 24";
 - a score from the judge as ground truth (it is an estimate, with its agreement rate and n);
-- variance, because one run per case is one sample. Repeated runs come on Day 5;
+- variance, because one run per case is one sample. Repeated runs come on Day 5 (done on Day 5 as identical-settings reruns: 0 of 24 cases flipped, so the model is deterministic at temperature 0; see docs/day-5-fix-and-compare-plan.md);
 - that the checker is perfect. The fault catalog bounds what it is known to catch.
 
 Risks and handling:

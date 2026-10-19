@@ -94,3 +94,4 @@ Each fault is run next to a **control** (the same task, no fault, same model). T
 - **Fault names:** `tool_timeout`, `malformed_output`, `wrong_tool`, `model_error`. The catalog of planted *check* faults (Day 3) gained `garbled_tool_output`, which is what proves `tool_output_contract`.
 - **Storage:** ground truth is in a `run_faults` table; lab results reuse the evaluation tables with kind `faultlab`.
 - **Not done:** repeated runs (one run per fault); a fifth fault (empty model response); runtime enforcement of the contracts (Day 5).
+- **Update, Day 5:** runtime enforcement of the contracts is built (`enforce_contracts`), and the lab was re-run on the real model against the resilient agent: timeout, model failure and malformed output became harmless (see docs/day-5-fix-and-compare-plan.md). The localizer gained a "retried" tier for recovered faults.

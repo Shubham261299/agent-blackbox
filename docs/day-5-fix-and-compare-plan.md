@@ -1,6 +1,10 @@
 # Day 5 plan: fix and compare
 
-Status: **planned, not built.** The decisions in section 9 are proposed defaults, each cheap to change. Nothing here has been run yet, and the predictions in section 6 are written before any run on purpose.
+Status: **built and measured (2026-10-19).** Sections 1-11 are the plan as written before any run, kept unedited on purpose, including the predictions in section 6; section 12 is the progress log with every result, and the summary below says where reality differed.
+
+**Outcome in one paragraph.** Resilience worked on the real model (3 recoverable faults fixed, 0 broken, nothing changed on clean cases). Guidance did not: two attempts both regressed task completion (golden-v3: baseline 19, v2 16, v3 17 of 24) while removing every policy violation. The recommended agent is `resilient`. Decisions D1 (two switch groups, four presets), D2 (identical-settings reruns, not seeds), D3 (a held-out set) and D4 (no hard guard in the first pass) were confirmed by the owner; D5 (no real tool deadline) and D6 (no second model) stood.
+
+**Where reality differed from the plan.** (1) The persistent timeout was not added as a fifth lab fault (it would have tested the script, not the agent); the retry limit is proven by unit tests. (2) The regression prediction was too mild (6 of 24 broken on golden-v2, 5 on golden-v3, not "at least one"). (3) A second guidance attempt (v3) was added by decision after v2 regressed, with its criterion fixed in advance. (4) A checker gap (C1/C4) was found by triage and fixed as golden-v3 with a new `rescore` command, which the plan did not anticipate. (5) The localizer gained a "retried" tier so a recovered fault can still be located. (6) The comparison UI also marks retried spans and shows the agent variant everywhere.
 
 ## 1. Goal
 
@@ -104,7 +108,7 @@ Build order (each stage ends with its tests, mutation checks and a local-commit 
 - The lab on the scripted model: each fault's before/after effect matches section 6, so a wrong prediction fails a test visibly.
 - Frontend: comparison view states (loading, mismatch error, no change, all fixed, some broken).
 
-## 9. Decisions to confirm
+## 9. Decisions to confirm (all confirmed or left as proposed; see the outcome above)
 
 | # | Question | Proposed default |
 |---|---|---|
