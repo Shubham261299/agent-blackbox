@@ -1562,3 +1562,217 @@ table.lab-compare tr[data-changed="true"] td:last-child {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- agent variants and before/after comparison (Day 5) ---------- */
+.variant-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  vertical-align: middle;
+}
+.variant {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  color: var(--ink-2);
+  font: 600 11.5px/1.6 var(--font);
+  white-space: nowrap;
+}
+.variant[data-variant="changed"] {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+.variant[data-variant="rescored"] {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.compare-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.compare-picker label {
+  font-weight: 600;
+}
+.compare-picker select {
+  max-width: 100%;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.compare-none {
+  margin-top: 12px;
+  max-width: 70ch;
+}
+
+.eyebrow {
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.verdict {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 18px 32px;
+  padding: 18px 20px;
+  border-inline-start: 5px solid var(--line-2);
+}
+.verdict[data-tone="better"] {
+  border-inline-start-color: var(--ok-ink);
+}
+.verdict[data-tone="worse"] {
+  border-inline-start-color: var(--crit);
+}
+.verdict[data-tone="mixed"] {
+  border-inline-start-color: var(--warn-line);
+}
+.verdict-main h2 {
+  margin-top: 2px;
+  font-size: 26px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+.verdict-main p:last-child {
+  margin-top: 6px;
+  max-width: 62ch;
+  color: var(--ink-2);
+}
+.verdict-bars {
+  display: grid;
+  gap: 10px;
+  align-content: center;
+}
+.verdict-bars dt {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.verdict-bars dd {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.delta {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.verdict-counts {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+.verdict-counts li {
+  color: var(--ink-2);
+}
+.verdict-counts strong {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.verdict-counts li[data-kind="fixed"] strong {
+  color: var(--ok-ink);
+}
+.verdict-counts li[data-kind="broken"] strong {
+  color: var(--crit-ink);
+}
+
+.outcome-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+.outcome-mark[data-pass="true"] {
+  color: var(--ok-ink);
+}
+.outcome-mark[data-pass="false"] {
+  color: var(--crit-ink);
+}
+table.compare-cases tr[data-change="broken"] td:first-child {
+  box-shadow: inset 3px 0 0 var(--crit);
+}
+table.compare-cases tr[data-change="fixed"] td:first-child {
+  box-shadow: inset 3px 0 0 var(--ok-ink);
+}
+.run-links {
+  white-space: nowrap;
+}
+.run-links .ext + .ext {
+  margin-inline-start: 12px;
+}
+.row-note {
+  display: block;
+  font-weight: 400;
+}
+td[data-sign="1"] {
+  color: var(--ok-ink);
+  font-weight: 650;
+}
+td[data-sign="-1"] {
+  color: var(--crit-ink);
+  font-weight: 650;
+}
+.limits {
+  padding: 14px 18px 16px;
+}
+.limits ul {
+  margin-top: 8px;
+  padding-inline-start: 18px;
+  display: grid;
+  gap: 6px;
+  max-width: 90ch;
+  color: var(--ink-2);
+}
+
+.retry-badge {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font: 650 11px/1.5 var(--font);
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .verdict {
+    grid-template-columns: 1fr;
+  }
+  .verdict-main h2 {
+    font-size: 22px;
+  }
+}
+
+/* row headers in the comparison tables read as labels, not as column headings */
+table.plain tbody th[scope="row"] {
+  background: transparent;
+  color: var(--ink);
+  font-size: inherit;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: start;
+}
+.limits ul {
+  list-style: disc;
+}

@@ -37,3 +37,9 @@ export function buildRows(spans: SpanRecord[]): TreeRow[] {
 export function traceDurationMs(spans: SpanRecord[]): number {
   return spans.reduce((max, s) => Math.max(max, s.start_offset_ms + s.duration_ms), 0);
 }
+
+/** How many times a call was retried before it went through (or gave up). Recorded by the resilient agent; 0 otherwise. */
+export function retryCount(span: { attributes: Record<string, unknown> }): number {
+  const n = span.attributes["blackbox.agent.retry_count"];
+  return typeof n === "number" && n > 0 ? n : 0;
+}

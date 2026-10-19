@@ -4,11 +4,14 @@ export type Route =
   | { name: "runs" }
   | { name: "run"; runId: string }
   | { name: "evals" }
-  | { name: "eval"; evalId: string };
+  | { name: "eval"; evalId: string }
+  | { name: "compare"; baseline: string; candidate: string };
 
 export function parseHash(hash: string): Route {
   const run = /^#\/runs\/([^/?#]+)/.exec(hash);
   if (run) return { name: "run", runId: decodeURIComponent(run[1] as string) };
+  const compare = /^#\/compare\/([^/?#]+)\/([^/?#]+)/.exec(hash);
+  if (compare) return { name: "compare", baseline: decodeURIComponent(compare[1] as string), candidate: decodeURIComponent(compare[2] as string) };
   const evalRun = /^#\/evals\/([^/?#]+)/.exec(hash);
   if (evalRun) return { name: "eval", evalId: decodeURIComponent(evalRun[1] as string) };
   if (/^#\/evals\/?$/.test(hash)) return { name: "evals" };
@@ -17,6 +20,8 @@ export function parseHash(hash: string): Route {
 
 export const runHref = (runId: string) => `#/runs/${encodeURIComponent(runId)}`;
 export const evalHref = (evalId: string) => `#/evals/${encodeURIComponent(evalId)}`;
+export const compareHref = (baselineId: string, candidateId: string) =>
+  `#/compare/${encodeURIComponent(baselineId)}/${encodeURIComponent(candidateId)}`;
 
 /** Hash routing keeps the app deployable as plain static files (the Day 6 demo). */
 export function useHashRoute(): Route {

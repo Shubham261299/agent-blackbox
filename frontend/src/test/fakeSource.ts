@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 import type { DataSource } from "../api/client";
-import { SCENARIOS, evalReport, happyPathSpans, run, runEvaluation } from "./factories";
+import { SCENARIOS, comparison, evalReport, happyPathSpans, run, runEvaluation } from "./factories";
 
 export function fakeSource(over: Partial<DataSource> = {}): DataSource {
   return {
@@ -14,6 +14,7 @@ export function fakeSource(over: Partial<DataSource> = {}): DataSource {
     startRun: vi.fn().mockResolvedValue(run({ run_id: "run-new", status: "running", duration_ms: null })),
     listEvals: vi.fn().mockResolvedValue([evalReport()]),
     getEval: vi.fn().mockResolvedValue(evalReport()),
+    compare: vi.fn().mockResolvedValue(comparison()),
     getRunEvaluation: vi.fn().mockResolvedValue(runEvaluation()),
     getRunFaults: vi.fn().mockResolvedValue([]),
     startEval: vi.fn().mockResolvedValue({ ...evalReport(), eval_id: "eval-new", status: "running", n_cases: 0, n_passed: 0 }),

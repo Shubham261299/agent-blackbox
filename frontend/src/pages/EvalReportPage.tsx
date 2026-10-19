@@ -6,7 +6,9 @@ import { ApiDown } from "../components/ApiDown";
 import { FaultLabReport } from "../components/FaultLabReport";
 import { Icon } from "../components/Icon";
 import { RateBar } from "../components/RateBar";
-import { runHref } from "../hooks/useHashRoute";
+import { VariantChip } from "../components/VariantChip";
+import { compareHref, runHref } from "../hooks/useHashRoute";
+import { comparableWith, variantLabel } from "../lib/compare";
 import { useQuery } from "../hooks/useQuery";
 import { median } from "../lib/format";
 import { validationNote } from "../lib/notes";
@@ -259,6 +261,44 @@ function Summary({ report }: { report: EvalReport }) {
   );
 }
 
+/** Offers only evaluations the API would accept (same model, dataset content and kind), newest first. */
+function ComparePicker({ report }: { report: EvalReport }) {
+  const source = useDataSource();
+  const all = useQuery(() => source.listEvals(), [source]);
+  const options = comparableWith(report, all.data ?? []);
+  const [chosen, setChosen] = useState("");
+  const pick = options.some((o) => o.eval_id === chosen) ? chosen : (options[0]?.eval_id ?? "");
+  if (report.status !== "done" || report.kind === "validation" || !all.data) return null;
+  if (options.length === 0) {
+    return (
+      <p className="muted small compare-none">
+        Nothing to compare this with yet: a comparison needs another finished evaluation of the same kind, on the same model and dataset content.
+      </p>
+    );
+  }
+  return (
+    <form
+      className="compare-picker"
+      onSubmit={(e) => {
+        e.preventDefault();
+        window.location.hash = compareHref(report.eval_id, pick);
+      }}
+    >
+      <label htmlFor="compare-with">Compare this evaluation (as the “before”) with</label>
+      <select id="compare-with" value={pick} onChange={(e) => setChosen(e.target.value)}>
+        {options.map((o) => (
+          <option key={o.eval_id} value={o.eval_id}>
+            {variantLabel(o.variant)} · {o.n_passed}/{o.n_cases} · {o.eval_id}
+          </option>
+        ))}
+      </select>
+      <button type="submit" className="btn">
+        Compare
+      </button>
+    </form>
+  );
+}
+
 export function EvalReportPage({ evalId }: { evalId: string }) {
   const source = useDataSource();
   const report = useQuery(() => source.getEval(evalId), [source, evalId], {
@@ -297,6 +337,7 @@ export function EvalReportPage({ evalId }: { evalId: string }) {
                 {data.status === "running" ? " · running" : data.status === "error" ? " · failed" : ""}
               </span>
               <h1>{data.model}</h1>
+              <VariantChip variant={data.variant} rescoredFrom={data.rescored_from} />
             </div>
             <dl className="facts-row">
               <div>
@@ -326,6 +367,7 @@ export function EvalReportPage({ evalId }: { evalId: string }) {
                 <dd className="mono">{data.eval_id}</dd>
               </div>
             </dl>
+            <ComparePicker report={data} />
           </header>
 
           {data.status === "running" && data.n_cases === 0 ? (

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import type { SpanRecord, SpanType } from "../api/types";
-import { buildRows, traceDurationMs } from "../lib/spanTree";
+import { buildRows, retryCount, traceDurationMs } from "../lib/spanTree";
 import { barGeometry, formatDuration, formatOffset, formatTick, niceStep, niceTicks, unitFor } from "../lib/timeScale";
 import { Icon, type IconName } from "./Icon";
 
@@ -124,6 +124,11 @@ export function Waterfall({
                 {plantedIds?.has(span.span_id) && (
                   <span className="planted-badge" title="A fault was planted in this span (failure lab)">
                     planted
+                  </span>
+                )}
+                {retryCount(span) > 0 && (
+                  <span className="retry-badge" title="This call needed retries before it went through">
+                    retried ×{retryCount(span)}
                   </span>
                 )}
                 {failed && (

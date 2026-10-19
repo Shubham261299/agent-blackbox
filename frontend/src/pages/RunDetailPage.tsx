@@ -4,6 +4,7 @@ import { useDataSource } from "../api/context";
 import type { RunEvaluation, RunFault, RunRecord, SpanRecord } from "../api/types";
 import { ApiDown } from "../components/ApiDown";
 import { CopyButton } from "../components/CopyButton";
+import { VariantChip } from "../components/VariantChip";
 import { EvaluationCard } from "../components/EvaluationCard";
 import { Icon } from "../components/Icon";
 import { RedactedText } from "../components/RedactedText";
@@ -232,6 +233,14 @@ export function RunDetailPage({ runId }: { runId: string }) {
                   {model?.provider && <span className="muted"> · {model.provider}</span>}
                 </dd>
               </div>
+              {run.data.variant !== "baseline" && (
+                <div>
+                  <dt>Agent</dt>
+                  <dd>
+                    <VariantChip variant={run.data.variant} />
+                  </dd>
+                </div>
+              )}
               <div>
                 <dt>Duration</dt>
                 <dd className="mono">{run.data.duration_ms == null ? "–" : formatDuration(run.data.duration_ms)}</dd>

@@ -2,17 +2,17 @@
 
 ## Resume here (read this first in a new chat)
 
-**Status:** Days 0-4 done and pushed (`origin/main` = `10ff969`, checked 2026-10-14). Day 5 (fix and compare) is **planned, not built**: see [docs/day-5-fix-and-compare-plan.md](docs/day-5-fix-and-compare-plan.md), decisions D1-D6 await the owner's confirmation. Push only when the owner says so.
+**Status:** Days 0-5 done. Days 0-4 are pushed (`origin/main` = `10ff969`); Day 5 is committed locally and is pushed at the end of the day when the owner says so. Day 6 (showcase) is next and not started. Push only when the owner says so.
 
 | Day | Topic | Status | Commits (local) |
 |---|---|---|---|
 | 0 | Spike | done | in scaffold |
-| 1 | Instrumented agent | done, pushed (through `b5ce783`); `a64ee26` is a Day 2 backend fix, not pushed | `15252b8`, `b5ce783` |
-| 2 | Dashboard | done, not pushed | `a64ee26`, `90af84c`, `b251747` |
-| 3 | Evaluation | done, not pushed | `92d7e3a`, `ba26ea0`, `dc67159` |
-| 4 | Failure lab | done, not pushed | `1335e6d` backend, `3dc832d` UI, plus the docs commit |
-| 5 | Fix and compare | **planned**, build not started | |
-| 6 | Showcase | not started | |
+| 1 | Instrumented agent | done, pushed | `15252b8`, `b5ce783` |
+| 2 | Dashboard | done, pushed | `a64ee26`, `90af84c`, `b251747` |
+| 3 | Evaluation | done, pushed | `92d7e3a`, `ba26ea0`, `dc67159` |
+| 4 | Failure lab | done, pushed | `1335e6d` backend, `3dc832d` UI, plus the docs commit |
+| 5 | Fix and compare | done, not pushed | `ac2d019`, `2c9e27b`, `0554030`, `0035a2f`, `7d88e71`, `1dc1377`, plus the stage 6 UI commit |
+| 6 | Showcase | **next** | |
 | 7 | Buffer / stretch | not started | |
 
 **Standing rules from the owner (do not break):**
@@ -25,10 +25,10 @@
 - Decisions already taken: 24 golden cases (golden-v3 current: golden-v2 with C1/C4 answer patterns widened after triage; v2 stays loadable), option B (only the order id of an address change is verified; keyed digest "option A" is a later extension), judged DeepEval subset of 6 on Day 7, qwen2.5:7b only.
 
 **How to run things (Windows, from the repo root; venv is `.venv`):**
-- Tests: `.venv\Scripts\python -m pytest` (364 backend, 1 needs Jaeger) and `cd frontend; npm test` (82), `npx tsc --noEmit`, `npm run build`.
-- API: `uvicorn --app-dir backend --factory blackbox.api.main:create_app --port 8000`; UI: `cd frontend; npm run dev` (port 5173).
+- Tests: `.venv\Scripts\python -m pytest` (376 backend, 1 needs Jaeger) and `cd frontend; npm test` (128), `npx tsc --noEmit`, `npm run build`.
+- API: `uvicorn --app-dir backend --factory blackbox.api.main:create_app --port 8000`; UI: `cd frontend; npm run dev` (port 5173). **Ports 8000, 8001 and 8765 are used by other projects on this machine** (check with `Get-NetTCPConnection -LocalPort <p> -State Listen` before starting; never kill a process you did not start). Pick a free port, start the API on it, and point the UI at it: `$env:BLACKBOX_API="http://127.0.0.1:<port>"; npm run dev -- --port 5190 --strictPort`. The Windows venv launcher spawns a child process, so record the listener PID (not just the launcher) to stop it.
 - Jaeger: `docker compose up -d` (container `jaeger`, UI 16686; no restart policy, start it again after a Docker restart).
-- Evaluations: `python -m blackbox.evals run --mode reference|faults|ollama|faultlab|faultlab-ollama`. Real-model runs take minutes on CPU.
+- Evaluations: `python -m blackbox.evals run --mode reference|faults|ollama|faultlab|faultlab-ollama [--variant baseline|resilient|guided|full|guided-v3|full-v3] [--dataset golden-v3|holdout-v1]`; `compare <before> <after>`; `rescore <eval> --dataset golden-v3`. Real-model runs take minutes on CPU.
 - Start servers in the background and **record the PID; stop by PID with `taskkill /T`, never by port.** Database: `data/blackbox.db` (git-ignored).
 - Tooling quirks: multi-line patch scripts go in the scratchpad via the Write tool (Bash heredoc quoting is fragile); screenshots via headless Edge.
 
@@ -36,8 +36,7 @@
 
 **Stored real-model results (local DB, git-ignored; rerun if the DB is gone):** benchmark eval-5b8f6d3c (19/24), reference eval-b6676352 (24/24), scripted lab eval-3623c6ad (4/4), real-model lab eval-92639afd (4/4), validation eval-a5479ac6 (11/11), holdout baseline eval-286fe069 (5/8, holdout-v1). Day 5 variants on golden-v2: baseline eval-7410381c 19/24, resilient eval-7caf9bfa 19/24, guided eval-ff0b3df7 15/24, full eval-a37cc205 15/24 (and eval-67a0cc90); holdout: resilient eval-ffb8d521, guided eval-bfaf8088, full eval-26376285 (all 5/8); golden-v3 rescores of the above: baseline eval-09d327ad 19/24, resilient eval-b07a0e6d 19/24, guided eval-71224f4b 16/24, full eval-08ae09b9 16/24, guided-v3 eval-c45fdf03 17/24, full-v3 eval-1f87936d 17/24. v3: guided-v3 eval-212048d0 (golden 15/24) and eval-dac487a9 (holdout 5/8), full-v3 eval-a8e43948 (golden 15/24), eval-7d90c662 (holdout 5/8), lab eval-55a817a2 (4/4); real-model lab: baseline eval-7f1699f1, resilient eval-0f9152b9, guided eval-4ac00a2b, full eval-1f6b2d31.
 
-**Day 5 starting point (proposed, not yet planned in detail):** fixes that target the measured failures: (1) retry with a limit and a timeout for tool and model errors, (2) enforce the tool output contracts at runtime (reject malformed output, retry), (3) tool descriptions and a prompt that say "ask instead of invent" and "look the order up first". Then run baseline vs fixed on the 24 cases and on the four lab faults, N repeats where affordable, and report pass rate, regression rate (cases that passed before and fail now) and the cost in steps and seconds. Open questions to settle in the plan: repeats per case (CPU cost: the 24-case benchmark took about 4 minutes), whether "fixed" is a toggle on one agent or a second configuration, and how to keep the comparison fair (same dataset hash, same model, same seed).
-
+**Day 6 starting point (not yet planned in detail):** a static demo mode with prebaked real runs (the `DataSource` interface already allows it; add a `compare` entry to the baked data), a short demo video/GIF, README (plain language first, every number from a stored evaluation, limits stated), Docker Compose. The story to tell: the agent runs, a tool fails, click the red span, the score drops; the resilient agent absorbs the same fault, the compare page shows 3 faults fixed and 0 broken at a stated cost; and the honest counter-example, guidance that regressed and the harness that caught it. Day 7 candidates: code-level guards, DeepEval cross-check, judged subset.
 ---
 
 Rough target, ordered by what the audience sees first. A day is done only when its **Done when** is met. If something overruns, cut from stretch, not from Day 6.
@@ -99,18 +98,16 @@ Rough target, ordered by what the audience sees first. A day is done only when i
 - Results (scripted and `qwen2.5:7b`, seed 0): all four faults located at rank 1. Effects: timeout and model failure end the run; malformed output is silent (gating checks pass; the real model quietly retried the lookup and finished correctly); wrong tool fails the policy check but the real model recovered afterwards.
 - Limits: four faults on one task is a demonstration, not a benchmark of localization. The localizer is a heuristic tuned while building the lab (the first version ranked the run span above the real culprit; fixed and tested). Scripted runs cannot adapt after a fault.
 
-## Day 5 — Fix and compare (planned; detail in [docs/day-5-fix-and-compare-plan.md](docs/day-5-fix-and-compare-plan.md))
-- [x] Stage 1: `holdout-v1` (8 cases) written before tuning; baseline on it 5/8 (eval-286fe069)
-- [x] Stage 2: `AgentConfig` + presets `baseline`/`resilient`; retries with a limit, runtime contract enforcement, injector `persistent` option; 296 backend tests, mutation-checked
-- [x] Stage 3: guidance v2 (prompt + tool descriptions), presets `guided`/`full`, v1 pinned, v2 frozen before any real run; 307 backend tests
-- [x] Stage 4: `variant` on runs and evals (with DB migration), `--variant`, `compare` (logic, API, CLI) with refusals, localizer tier 4 "retried"; 325 backend tests
-- [x] Stage 5 real runs done 2026-10-19 (results in the day-5 doc, section 12): resilience works on the real model, guidance v2 REGRESSED (golden 19 -> 15). v3 (the one labelled second attempt) also failed: golden 15/24, see section 12. C1/C4 checker gap fixed as golden-v3 (default dataset) with `rescore`; final table in the day-5 doc, section 12. Prompt guidance stopped by decision after two attempts; recommended variant: resilient.
-- [ ] Stage 6 UI, 7 docs remain: retry with a limit and a timeout for tool/model errors; runtime enforcement of the tool output contracts; tool descriptions and prompt for "look the order up first" and "ask instead of invent"
-- [ ] Baseline vs fixed over the 24 cases (and the four lab faults), same dataset hash, model and seed; repeats where CPU time allows
-- [ ] Regression rate (passed before, fails now), pass rate, cost in steps and seconds
-- [ ] Comparison view in the UI
-- **Done when** a measured before/after table exists, stored from real runs.
-- Targets from Day 3/4 findings: invented values (A2, A4, F3, F4), skipped lookup (N6, N8, F2), missing "cannot cancel" (W1); infrastructure failures that kill the run (timeout, model error); silent malformed output.
+## Day 5 — Fix and compare — DONE (committed locally; detail and every number in [docs/day-5-fix-and-compare-plan.md](docs/day-5-fix-and-compare-plan.md))
+- [x] Held-out set `holdout-v1` (8 cases) written before any tuning; baseline 5/8
+- [x] `AgentConfig` presets `baseline`, `resilient`, `guided`, `full`, `guided-v3`, `full-v3`; the baseline is byte-identical to the Day 1-4 agent. Resilience: retry with a limit (2 retries) for tool timeouts and model errors, runtime enforcement of the tool output contracts, retries recorded as events on the one span. Guidance: v1 (frozen), v2 and v3 prompts and tool descriptions (each pinned by a test)
+- [x] `variant` on runs and evaluations (with a DB migration), `--variant`, `compare` (logic, `GET /evals/compare`, CLI) that refuses an unfair comparison and says why, `rescore` (re-judge stored runs against another dataset version, no model run), localizer tier 4 "retried"
+- [x] Real-model runs: 4 + 2 variants on golden, 5 on the held-out set, 6 failure-lab runs, noise-floor repeats (0 of 24 flipped twice). golden-v3 (C1/C4 answer patterns widened after triaging every failing answer) is now the default dataset
+- [x] UI: comparison page (`#/compare/<before>/<after>`: what changed, case by case with broken first, by check, cost, how to read it), compare picker on the evaluation report, agent chip on runs and evaluations, "retried" badge and inspector note on spans
+- [x] Tests: 376 backend (1 needs Jaeger) and 128 frontend; every new rule mutation-checked
+- **Done when** a measured before/after table exists, stored from real runs. -> **Met.**
+- **Results (qwen2.5:7b, seed 0, golden-v3, 24 cases):** baseline 19; resilient 19 (0 fixed, 0 broken, no cost on clean runs); guided v2 16 (2 fixed, 5 broken); guided v3 17 (1 fixed, 3 broken). On the real-model failure lab, resilient turned timeout, model failure and malformed output from harmful to harmless (3 fixed, 0 broken; cost 3 retries, +15% median time). Guidance removed every policy violation but cost task completion (22 -> 16/17 of 24). **Recommended agent: resilient.**
+- Limits: one model, n = 24 + 8, one run per variant; the held-out set was not clean for v3 (v2's results were read first). Invented amounts and the cannot-cancel case are not fixed by prompt wording: a code-level guard (lookup-first enforcement, grounding every tool argument in the customer's message) is a Day 7 option.
 
 ## Day 6 — Showcase
 - [ ] Static demo mode with prebaked real runs (DataSource interface already allows it), deployed on free hosting

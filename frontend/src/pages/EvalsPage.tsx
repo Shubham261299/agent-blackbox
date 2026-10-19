@@ -5,6 +5,7 @@ import { ApiDown } from "../components/ApiDown";
 import { CopyButton } from "../components/CopyButton";
 import { Icon } from "../components/Icon";
 import { RateBar } from "../components/RateBar";
+import { VariantChip } from "../components/VariantChip";
 import { evalHref } from "../hooks/useHashRoute";
 import { useQuery } from "../hooks/useQuery";
 import { timeAgo } from "../lib/format";
@@ -115,6 +116,7 @@ export function EvalsPage() {
                   <tr>
                     <th scope="col">Kind</th>
                     <th scope="col">Model</th>
+                    <th scope="col">Agent</th>
                     <th scope="col">Dataset</th>
                     <th scope="col">Cases passed</th>
                     <th scope="col" className="num">
@@ -133,6 +135,9 @@ export function EvalsPage() {
                       </td>
                       <td>
                         <span className="model-name">{e.model}</span>
+                      </td>
+                      <td>
+                        <VariantChip variant={e.variant} rescoredFrom={e.rescored_from} />
                       </td>
                       <td>
                         <span className="mono small">

@@ -1,5 +1,5 @@
 import type {
-  CheckResult, EvalCaseResult, EvalReport, FaultLabNote, LabRunSummary, RunEvaluation, RunFault, RunRecord, ScenarioInfo,
+  CaseChange, CheckResult, Comparison, CostTotals, EvalCaseResult, EvalReport, FaultLabNote, LabRunSummary, RunEvaluation, RunFault, RunRecord, ScenarioInfo,
   SpanRecord, Suspect,
 } from "../api/types";
 
@@ -32,6 +32,7 @@ export function run(over: Partial<RunRecord> = {}): RunRecord {
     duration_ms: 42,
     final_answer: "I issued a refund of $59.90 for order 42.",
     error: null,
+    variant: "baseline",
     ...over,
   };
 }
@@ -98,7 +99,8 @@ export function evalReport(over: Partial<EvalReport> = {}): EvalReport {
   ];
   return {
     eval_id: "eval-bench", kind: "benchmark", model: "ollama:qwen2.5:7b", dataset_version: "golden-v2",
-    dataset_hash: "abc123def456", seed: 0, started_at: new Date().toISOString(), finished_at: new Date().toISOString(),
+    dataset_hash: "abc123def456", seed: 0, variant: "baseline", rescored_from: null,
+    started_at: new Date().toISOString(), finished_at: new Date().toISOString(),
     status: "done", n_cases: 3, n_passed: 2, cases,
     metrics: [
       { metric: "task_completion", gating: true, passed: 3, total: 3, mean_score: 1 },
@@ -154,7 +156,7 @@ export function faultLabCase(over: Partial<EvalCaseResult> = {}, note: Partial<F
 export function faultLabReport(over: Partial<EvalReport> = {}): EvalReport {
   return {
     eval_id: "eval-lab", kind: "faultlab", model: "scripted:faultlab", dataset_version: "golden-v2", dataset_hash: "abc123def456",
-    seed: null, started_at: new Date().toISOString(), finished_at: new Date().toISOString(), status: "done", n_cases: 2, n_passed: 1,
+    seed: null, variant: "baseline", rescored_from: null, started_at: new Date().toISOString(), finished_at: new Date().toISOString(), status: "done", n_cases: 2, n_passed: 1,
     cases: [
       faultLabCase(),
       faultLabCase({ case_id: "tool_timeout", run_id: "run-timeout" }, {
@@ -167,5 +169,47 @@ export function faultLabReport(over: Partial<EvalReport> = {}): EvalReport {
       }),
     ],
     metrics: [], categories: [], ...over,
+  };
+}
+
+// ---- before/after comparison ----
+export function caseChange(over: Partial<CaseChange> = {}): CaseChange {
+  return {
+    case_id: "N1", category: "normal", task: "Order 42 arrived damaged, please refund it.", change: "still_passing",
+    baseline_passed: true, candidate_passed: true, baseline_run_id: "run-b-n1", candidate_run_id: "run-c-n1",
+    baseline_failed_checks: [], candidate_failed_checks: [], baseline_effect: null, candidate_effect: null,
+    baseline_duration_ms: 10000, candidate_duration_ms: 9000, baseline_tool_calls: 3, candidate_tool_calls: 3,
+    baseline_retries: 0, candidate_retries: 0, ...over,
+  };
+}
+
+function cost(over: Partial<CostTotals> = {}): CostTotals {
+  return { cases: 4, tool_calls: 10, model_calls: 16, retries: 0, total_duration_ms: 40000, median_duration_ms: 10000,
+           input_tokens: 8000, output_tokens: 600, ...over };
+}
+
+/** A baseline against a variant that fixed one case, broke one, and left two alone. */
+export function comparison(over: Partial<Comparison> = {}): Comparison {
+  const base = evalReport({ eval_id: "eval-base", variant: "baseline" });
+  const cand = evalReport({ eval_id: "eval-cand", variant: "guided" });
+  const strip = ({ cases: _c, metrics: _m, categories: _k, ...summary }: EvalReport) => summary;
+  return {
+    kind: "benchmark", baseline: strip(base), candidate: strip(cand), matched: 4, fixed: 1, broken: 1, still_passing: 1, still_failing: 1,
+    cases: [
+      caseChange({ case_id: "N1", change: "broken", baseline_passed: true, candidate_passed: false, candidate_failed_checks: ["task_completion", "tool_correctness"] }),
+      caseChange({ case_id: "N8", category: "normal", task: "I'd like a $25 partial refund on order 42.", change: "fixed", baseline_passed: false, candidate_passed: true,
+        baseline_run_id: "run-b-n8", candidate_run_id: "run-c-n8", baseline_failed_checks: ["policy_compliance"] }),
+      caseChange({ case_id: "N2", category: "normal", change: "still_passing", task: "Order 46 was the wrong colour.", baseline_run_id: "run-b-n2", candidate_run_id: "run-c-n2" }),
+      caseChange({ case_id: "A2", category: "ambiguous", task: "Refund some of order 42.", change: "still_failing", baseline_passed: false, candidate_passed: false,
+        baseline_run_id: "run-b-a2", candidate_run_id: "run-c-a2", baseline_failed_checks: ["task_completion"], candidate_failed_checks: ["task_completion"] }),
+    ],
+    metrics: [
+      { metric: "task_completion", gating: true, baseline_passed: 3, baseline_total: 4, candidate_passed: 2, candidate_total: 4 },
+      { metric: "policy_compliance", gating: true, baseline_passed: 3, baseline_total: 4, candidate_passed: 4, candidate_total: 4 },
+      { metric: "tool_correctness", gating: false, baseline_passed: 3, baseline_total: 4, candidate_passed: 3, candidate_total: 4 },
+    ],
+    categories: [{ category: "normal", total: 3, baseline_passed: 2, candidate_passed: 2 }, { category: "ambiguous", total: 1, baseline_passed: 0, candidate_passed: 0 }],
+    baseline_cost: cost(), candidate_cost: cost({ tool_calls: 7, model_calls: 13, total_duration_ms: 31000, median_duration_ms: 8000 }),
+    ...over,
   };
 }

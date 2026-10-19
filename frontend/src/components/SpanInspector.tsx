@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { CheckResult, SpanEvent, SpanRecord } from "../api/types";
+import { retryCount } from "../lib/spanTree";
 import { formatDuration, formatOffset } from "../lib/timeScale";
 import { metricLabel } from "../lib/metrics";
 import { countRedactions, parseMaybeJson, prettyJson } from "../lib/redaction";
@@ -87,13 +88,15 @@ function Events({ events }: { events: SpanEvent[] }) {
     <ul className="events">
       {events.map((e, i) => {
         const type = e.attributes["exception.type"];
+        const attempt = e.name === "retry" ? e.attributes["retry.attempt"] : undefined;
         const message = e.attributes["exception.message"];
         const stack = e.attributes["exception.stacktrace"];
         return (
           <li key={i} data-kind={e.name}>
             <div className="event-head">
-              <Icon name={e.name === "exception" ? "x" : "check"} size={13} />
+              <Icon name={e.name === "exception" ? "x" : e.name === "retry" ? "alert" : "check"} size={13} />
               <strong>{e.name}</strong>
+              {typeof attempt === "number" && <span className="muted small">after attempt {attempt}</span>}
               {typeof type === "string" && <span className="mono muted small">{type}</span>}
             </div>
             {typeof message === "string" && (
@@ -109,7 +112,7 @@ function Events({ events }: { events: SpanEvent[] }) {
                 </pre>
               </details>
             )}
-            {e.name !== "exception" && Object.keys(e.attributes).length > 0 && <CodeBlock value={e.attributes} label={`${e.name} attributes`} />}
+            {e.name !== "exception" && e.name !== "retry" && Object.keys(e.attributes).length > 0 && <CodeBlock value={e.attributes} label={`${e.name} attributes`} />}
           </li>
         );
       })}
@@ -151,6 +154,7 @@ export function SpanInspector({
   const toolCalls = str(span, "blackbox.model.tool_calls");
   const agentInput = str(span, "blackbox.agent.input");
   const agentOutput = str(span, "blackbox.agent.output");
+  const retries = retryCount(span);
   const attrEntries = Object.entries(span.attributes).sort(([a], [b]) => a.localeCompare(b));
 
   return (
@@ -176,6 +180,16 @@ export function SpanInspector({
             <p>
               <RedactedText text={span.status_message ?? "No message recorded."} />
             </p>
+          </div>
+        </div>
+      )}
+
+      {retries > 0 && span.status !== "error" && (
+        <div className="callout" role="note">
+          <Icon name="alert" size={15} />
+          <div>
+            <strong>This call needed {retries === 1 ? "a retry" : `${retries} retries`} before it went through</strong>
+            <p>The agent absorbed the failure, so the run went on. The failed attempts are listed under Events.</p>
           </div>
         </div>
       )}
@@ -212,6 +226,7 @@ export function SpanInspector({
         </Fact>
         {model && <Fact label="Model">{provider ? `${model} · ${provider}` : model}</Fact>}
         {step && <Fact label="Agent step">{step}</Fact>}
+        {retries > 0 && <Fact label="Retries">{retries}</Fact>}
         {(tokensIn !== undefined || tokensOut !== undefined) && (
           <Fact label="Tokens in / out">
             <span className="mono">

@@ -14,6 +14,8 @@ export interface RunRecord {
   duration_ms: number | null;
   final_answer: string | null;
   error: string | null;
+  /** Which agent configuration made the run: baseline, resilient, guided, full, ... */
+  variant: string;
 }
 
 export interface SpanEvent {
@@ -59,6 +61,10 @@ export interface EvalRunSummary {
   dataset_version: string;
   dataset_hash: string;
   seed: number | null;
+  /** Which agent configuration produced the runs. */
+  variant: string;
+  /** Set when this evaluation re-judged another one's stored runs (no model was run). */
+  rescored_from: string | null;
   started_at: string;
   finished_at: string | null;
   status: "running" | "done" | "error";
@@ -69,7 +75,7 @@ export interface EvalRunSummary {
 export interface Suspect {
   span_id: string;
   span_name: string;
-  /** 0 contract violation, 1 failed gating check, 2 failed reported check, 3 error status */
+  /** 0 contract violation, 1 failed gating check, 2 failed reported check, 3 error status, 4 retried before it went through */
   tier: number;
   source: string;
   reason: string;
@@ -175,4 +181,75 @@ export interface RunRequest {
   task: string;
   model: "scripted" | "ollama";
   scenario?: string | null;
+  variant?: string;
+}
+
+// ---- before/after comparison of two stored evaluations (GET /evals/compare) ----
+export type CaseChangeKind = "fixed" | "broken" | "still_passing" | "still_failing" | "only_baseline" | "only_candidate";
+
+export interface CaseChange {
+  case_id: string;
+  category: string;
+  task: string;
+  change: CaseChangeKind;
+  baseline_passed: boolean | null;
+  candidate_passed: boolean | null;
+  baseline_run_id: string | null;
+  candidate_run_id: string | null;
+  baseline_failed_checks: string[];
+  candidate_failed_checks: string[];
+  /** Failure lab only. */
+  baseline_effect: LabEffect | null;
+  candidate_effect: LabEffect | null;
+  baseline_duration_ms: number | null;
+  candidate_duration_ms: number | null;
+  baseline_tool_calls: number | null;
+  candidate_tool_calls: number | null;
+  baseline_retries: number | null;
+  candidate_retries: number | null;
+}
+
+export interface MetricChange {
+  metric: string;
+  gating: boolean;
+  baseline_passed: number;
+  baseline_total: number;
+  candidate_passed: number;
+  candidate_total: number;
+}
+
+export interface CategoryChange {
+  category: string;
+  total: number;
+  baseline_passed: number;
+  candidate_passed: number;
+}
+
+export interface CostTotals {
+  cases: number;
+  tool_calls: number;
+  model_calls: number;
+  retries: number;
+  total_duration_ms: number;
+  median_duration_ms: number | null;
+  /** null when any run did not measure tokens */
+  input_tokens: number | null;
+  output_tokens: number | null;
+}
+
+export interface Comparison {
+  kind: EvalKind;
+  baseline: EvalRunSummary;
+  candidate: EvalRunSummary;
+  /** Cases both sides ran; the counts below use only these. */
+  matched: number;
+  fixed: number;
+  broken: number;
+  still_passing: number;
+  still_failing: number;
+  cases: CaseChange[];
+  metrics: MetricChange[];
+  categories: CategoryChange[];
+  baseline_cost: CostTotals;
+  candidate_cost: CostTotals;
 }

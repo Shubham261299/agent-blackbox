@@ -1,4 +1,4 @@
-import type { EvalReport, EvalRunSummary, RunEvaluation, RunFault, RunRecord, RunRequest, ScenarioInfo, SpanRecord } from "./types";
+import type { Comparison, EvalReport, EvalRunSummary, RunEvaluation, RunFault, RunRecord, RunRequest, ScenarioInfo, SpanRecord } from "./types";
 
 /**
  * Everything the UI reads goes through this interface, so a prebaked-JSON source (static demo)
@@ -16,6 +16,8 @@ export interface DataSource {
   startRun(request: RunRequest): Promise<RunRecord>;
   listEvals(): Promise<EvalRunSummary[]>;
   getEval(evalId: string): Promise<EvalReport>;
+  /** Before/after of two stored evaluations. Rejects with an ApiError (422) saying why they cannot be compared fairly. */
+  compare(baselineId: string, candidateId: string): Promise<Comparison>;
   getRunEvaluation(runId: string): Promise<RunEvaluation>;
   getRunFaults(runId: string): Promise<RunFault[]>;
   startEval(mode: "reference" | "faults" | "faultlab"): Promise<EvalRunSummary>;
@@ -82,6 +84,8 @@ export function createApiSource(base = "/api"): DataSource {
       }),
     listEvals: () => request<EvalRunSummary[]>("/evals"),
     getEval: (id) => request<EvalReport>(`/evals/${encodeURIComponent(id)}`),
+    compare: (baseline, candidate) =>
+      request<Comparison>(`/evals/compare?baseline=${encodeURIComponent(baseline)}&candidate=${encodeURIComponent(candidate)}`),
     getRunEvaluation: (id) => request<RunEvaluation>(`/runs/${encodeURIComponent(id)}/evaluation`),
     getRunFaults: (id) => request<RunFault[]>(`/runs/${encodeURIComponent(id)}/faults`),
     startEval: (mode) =>
