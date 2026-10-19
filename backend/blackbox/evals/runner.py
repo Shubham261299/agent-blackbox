@@ -26,7 +26,8 @@ from blackbox.faults.injector import FaultInjector
 from blackbox.llm.base import ModelClient
 from blackbox.llm.ollama_client import OllamaClient
 from blackbox.llm.scripted import ScriptedModel
-from blackbox.models import EvalCaseResult, EvalKind, EvalRunSummary
+from blackbox.models import EvalCaseResult, EvalKind, EvalReport, EvalRunSummary
+from blackbox.store.db import Store
 
 Mode = Literal["ollama", "reference", "faults", "faultlab", "faultlab-ollama"]
 KIND: dict[str, EvalKind] = {
@@ -118,6 +119,46 @@ def execute_evaluation(service: RunService, dataset: Dataset, mode: Mode, eval_i
     except Exception:
         store.finish_eval_run(eval_id, "error", _now())
         raise
+
+
+def rescore_evaluation(store: Store, source: EvalReport, dataset: Dataset) -> str:
+    """A new evaluation made by judging the stored runs of an existing one against another dataset version.
+
+    No model is run: the agent's behaviour is exactly what was recorded, only the expectations change. It exists for
+    the one legitimate reason to change expectations after seeing results, a correct answer the checks did not
+    recognise (see the golden-v3 changelog). The old evaluation is kept under its own dataset hash, and the new one
+    says where it came from.
+    """
+    if source.kind not in ("benchmark", "reference"):
+        raise ValueError(f"only benchmark and reference evaluations can be rescored, not {source.kind}")
+    known = {c.id: c for c in dataset.cases}
+    missing = [c.case_id for c in source.cases if c.case_id not in known]
+    if missing:
+        raise ValueError(f"{dataset.version} has no case {', '.join(missing)}")
+    changed = [c.case_id for c in source.cases if known[c.case_id].task != c.task]
+    if changed:
+        raise ValueError(f"the task of {', '.join(changed)} differs in {dataset.version}: those runs answered another task")
+    summary = EvalRunSummary(
+        eval_id=f"eval-{uuid.uuid4().hex[:8]}", kind=source.kind, model=source.model, dataset_version=dataset.version,
+        dataset_hash=dataset.content_hash, seed=source.seed, variant=source.variant, rescored_from=source.eval_id,
+        started_at=_now(), status="running",
+    )
+    store.create_eval_run(summary)
+    try:
+        for old in source.cases:
+            run = store.get_run(old.run_id)
+            if run is None:
+                raise ValueError(f"run {old.run_id} of case {old.case_id} is not in the database")
+            case = known[old.case_id]
+            checks = evaluate_case(case, build_trajectory(run, store.get_spans(old.run_id)))
+            store.save_eval_case(summary.eval_id, EvalCaseResult(
+                case_id=case.id, category=case.category, task=case.task, run_id=run.run_id, run_status=run.status,
+                passed=case_passed(checks), duration_ms=run.duration_ms, checks=checks))
+        store.finish_eval_run(summary.eval_id, "done", _now())
+    except Exception:
+        store.finish_eval_run(summary.eval_id, "error", _now())
+        raise
+    return summary.eval_id
 
 
 def run_evaluation(service: RunService, dataset: Dataset, mode: Mode, case_ids: list[str] | None = None,

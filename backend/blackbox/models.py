@@ -49,6 +49,7 @@ class EvalRunSummary(BaseModel):
     dataset_hash: str
     seed: int | None = None
     variant: str = "baseline"  # which agent configuration produced the runs
+    rescored_from: str | None = None  # set when this evaluation re-judged another one's stored runs (no model was run)
     started_at: str
     finished_at: str | None = None
     status: Literal["running", "done", "error"]

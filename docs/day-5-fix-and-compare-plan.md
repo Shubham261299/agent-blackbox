@@ -242,3 +242,30 @@ By the criterion written before the run (golden pass count above 19), **v3 faile
 - Failure lab on `full-v3` (eval-55a817a2): the control passes, 3 faults fixed, 0 broken, wrong tool unchanged, as predicted. Cost: 3 retries, tool calls 11 -> 13, model calls 14 -> 17, median run 11.3 -> 14.2 s.
 
 **Triage finding (checker, not agent).** Two of the golden failures are the checker rejecting a correct answer, the same kind of gap as F1 and C2 on Day 3. C1 and C4 ask for a refund over the $100 limit and the agent correctly declines ("the policy does not allow a refund of $180 ... the maximum refund allowed is $100"), but the answer patterns for C1 and C4 only recognise "can't / cannot / unable / unfortunately / won't / limit". C2's patterns were widened for this on Day 3 and C1/C4 were not. Counted as correct, v2 would be 16/24 and v3 17/24 (baseline stays 19/24, whose answers already matched). N2, N7 and W4 are real failures. Nothing has been changed: any fix is a new dataset version (widening only, the old results staying under the old hash), and is an owner decision.
+
+### Stage 5c: golden-v3 and rescoring (2026-10-19)
+
+**The triage covered everything, not just v3.** Every stored real-model answer that failed an answer pattern (18 distinct answers across all variants and both datasets) was read. Correct answers the checks rejected: C4 (under v2) and C1 (under v3), both correct refusals of an over-limit refund ("the policy does not allow a full refund ... the maximum refund amount is $100"). Everything else was a genuine agent failure: invented amounts (A2, H4), asking for details already given (N7, W2, W1, F2, W4), and invented rules (N6 "cannot change the address once dispatched" for an order that is shipped, N2, H1).
+
+**golden-v3** widens only the answer patterns of C1 and C4 (adding maximum / only allows / not allowed / does not allow / doesn't allow / exceeds, the C2 alternation plus the observed wording). The diff against v2 is the version, the changelog and those two lines, and a test pins that. Widening only, so an answer v2 accepted v3 accepts; each added phrase is tested on its own, and a refusal-sounding answer cannot hide an issued refund. golden-v3 is now the default dataset; golden-v2 stays loadable and its hash is unchanged.
+
+**`rescore`** (`python -m blackbox.evals rescore <eval_id> --dataset golden-v3`) judges the stored runs of an evaluation against another dataset version. No model is run; the runs are the same, only the expectations differ. The new evaluation records `rescored_from`, the original is untouched, and it refuses lab and validation evaluations, a dataset missing a case, and a case whose task text changed. All seven real golden evaluations were rescored, so every variant is judged by the same cases.
+
+**Final golden-v3 table** (`qwen2.5:7b`, seed 0, 24 cases; fixed / broken against baseline eval-09d327ad):
+
+| Variant | Evaluation | Passed | Fixed | Broken | Policy | Task | Tool calls | Median run |
+|---|---|---|---|---|---|---|---|---|
+| baseline | eval-09d327ad | 19/24 | | | 21/24 | 22/24 | 39 | 10.3 s |
+| resilient | eval-b07a0e6d | 19/24 | 0 | 0 | 21/24 | 22/24 | 39 | 10.3 s |
+| guided (v2) | eval-71224f4b | 16/24 | 2 | 5 | 24/24 | 16/24 | 25 | 8.3 s |
+| full (v2) | eval-08ae09b9 | 16/24 | 2 | 5 | 24/24 | 16/24 | 25 | 8.1 s |
+| guided-v3 | eval-c45fdf03 | 17/24 | 1 | 3 | 24/24 | 17/24 | 31 | 9.3 s |
+| full-v3 | eval-1f87936d | 17/24 | 1 | 3 | 24/24 | 17/24 | 31 | 8.7 s |
+
+(The first `full` run, eval-67a0cc90, rescored to eval-5472de4e, flipped 0 cases against its repeat.) The held-out set needs no rescoring: holdout-v1 is unchanged.
+
+**What the whole of Day 5 shows, in plain words.**
+1. *Resilience works and costs nothing when nothing is wrong.* On the real model it turned all three recoverable faults (timeout, model failure, malformed output) from harmful to harmless, with 0 regressions on 24 + 8 clean cases and identical call counts there. It cost 3 retries (11 -> 13 tool calls, 11.3 -> 13.0 s median) across the lab.
+2. *Prompt guidance did not work on this 7B model, twice.* It removed every policy violation (21/24 -> 24/24 on golden, and on held-out for v2) by making the agent do less, and in doing so lost task completion (22/24 -> 16/24 for v2, 17/24 for v3). Fewer tool calls (39 -> 25 / 31) is the same fact seen from the cost side. It did not stop invented amounts or fix the cannot-cancel case.
+3. *The harness is what made these findings visible.* A pass rate alone would have said "guided 16/24, worse"; the fixed/broken table says which cases and the traces say why. The regression, the over-asking, the invented rule, and the checker gap were all found by reading stored runs, not by guessing.
+4. *Recommended agent from this evidence: `resilient`.* A code-level guard (lookup-first enforcement, or checking that every tool argument appears in the customer's message) is the next experiment (Day 7); the prompt route has been tried twice and stopped, by decision.

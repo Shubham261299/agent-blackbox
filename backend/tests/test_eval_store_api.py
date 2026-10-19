@@ -15,7 +15,7 @@ def test_reference_evaluation_is_stored_and_summarised(service, store):
     eval_id = run_evaluation(service, DATASET, "reference")
     report = store.get_eval_report(eval_id)
     assert report.kind == "reference" and report.status == "done"
-    assert report.dataset_version == "golden-v2" and report.dataset_hash == DATASET.content_hash
+    assert report.dataset_version == "golden-v3" and report.dataset_hash == DATASET.content_hash
     assert (report.n_cases, report.n_passed) == (24, 24)
 
     metrics = {m.metric: m for m in report.metrics}

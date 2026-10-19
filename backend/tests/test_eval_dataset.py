@@ -11,7 +11,7 @@ from blackbox.evals.checks import case_passed
 from blackbox.evals.runner import run_case
 from blackbox.evals.scripts import reference_model
 
-DATASET = load_dataset()
+DATASET = load_dataset("golden-v2")  # frozen: golden-v3 has its own tests (test_eval_golden_v3.py)
 CASE_IDS = [c.id for c in DATASET.cases]
 KNOWN_TOOLS = set(OrderDesk().registry())
 NONEXISTENT_ORDER_CASES = {"F1", "F4"}  # these two are about orders that do not exist, on purpose
@@ -36,7 +36,7 @@ def test_v2_differs_from_v1_only_where_the_changelog_says():
 
 
 def test_hash_identifies_the_content():
-    assert load_dataset().content_hash == DATASET.content_hash
+    assert load_dataset("golden-v2").content_hash == DATASET.content_hash
 
 
 @pytest.mark.parametrize("case", DATASET.cases, ids=CASE_IDS)

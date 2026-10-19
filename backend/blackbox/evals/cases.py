@@ -62,7 +62,7 @@ class Dataset(BaseModel):
         raise KeyError(case_id)
 
 
-DEFAULT_DATASET = "golden-v2"
+DEFAULT_DATASET = "golden-v3"
 
 
 def load_dataset(name: str = DEFAULT_DATASET, directory: Path = DATASETS_DIR) -> Dataset:

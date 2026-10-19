@@ -54,7 +54,8 @@ CREATE TABLE IF NOT EXISTS eval_runs (
     started_at      TEXT NOT NULL,
     finished_at     TEXT,
     status          TEXT NOT NULL,
-    variant         TEXT NOT NULL DEFAULT 'baseline'
+    variant         TEXT NOT NULL DEFAULT 'baseline',
+    rescored_from   TEXT
 );
 CREATE TABLE IF NOT EXISTS eval_cases (
     eval_id     TEXT NOT NULL,
@@ -113,10 +114,14 @@ class Store:
     def _add_missing_columns(self) -> None:
         """Databases made before a column existed keep working: CREATE TABLE IF NOT EXISTS does not add columns, so
         add them here. Every row written before variants existed came from the baseline agent, hence the default."""
-        for table, column in (("runs", "variant"), ("eval_runs", "variant")):
+        for table, column, definition in (
+            ("runs", "variant", "TEXT NOT NULL DEFAULT 'baseline'"),
+            ("eval_runs", "variant", "TEXT NOT NULL DEFAULT 'baseline'"),
+            ("eval_runs", "rescored_from", "TEXT"),
+        ):
             have = {row[1] for row in self._db.execute(f"PRAGMA table_info({table})")}
             if column not in have:
-                self._db.execute(f"ALTER TABLE {table} ADD COLUMN {column} TEXT NOT NULL DEFAULT 'baseline'")
+                self._db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
         self._db.commit()
 
     def close(self) -> None:
@@ -209,9 +214,10 @@ class Store:
         with self._lock:
             self._db.execute(
                 "INSERT INTO eval_runs (eval_id, kind, model, dataset_version, dataset_hash, seed, started_at,"
-                " finished_at, status, variant) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                " finished_at, status, variant, rescored_from) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (summary.eval_id, summary.kind, summary.model, summary.dataset_version, summary.dataset_hash,
-                 summary.seed, summary.started_at, summary.finished_at, summary.status, summary.variant),
+                 summary.seed, summary.started_at, summary.finished_at, summary.status, summary.variant,
+                 summary.rescored_from),
             )
             self._db.commit()
 
@@ -240,7 +246,7 @@ class Store:
     def _summary_from_row(row: sqlite3.Row) -> EvalRunSummary:
         return EvalRunSummary(
             eval_id=row["eval_id"], kind=row["kind"], model=row["model"], dataset_version=row["dataset_version"],
-            dataset_hash=row["dataset_hash"], seed=row["seed"], variant=row["variant"], started_at=row["started_at"],
+            dataset_hash=row["dataset_hash"], seed=row["seed"], variant=row["variant"], rescored_from=row["rescored_from"], started_at=row["started_at"],
             finished_at=row["finished_at"], status=row["status"],
             n_cases=row["n_cases"] or 0, n_passed=row["n_passed"] or 0,
         )

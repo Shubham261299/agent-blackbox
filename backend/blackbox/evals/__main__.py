@@ -8,6 +8,7 @@
   python -m blackbox.evals run --mode faultlab-ollama       # failure lab with the real model (a few minutes)
   python -m blackbox.evals run --mode ollama --variant full # the same benchmark on a fixed agent
   python -m blackbox.evals compare eval-aaaa eval-bbbb      # before/after of two stored evaluations
+  python -m blackbox.evals rescore eval-aaaa --dataset golden-v3   # re-judge stored runs, no model is run
 
 Run from ./backend. Results go to the same SQLite database the API reads (BLACKBOX_DB_PATH).
 """
@@ -18,9 +19,9 @@ import time
 from blackbox.agent.config import PRESETS, preset
 from blackbox.agent.service import RunService
 from blackbox.config import get_settings
-from blackbox.evals.cases import load_dataset
+from blackbox.evals.cases import DEFAULT_DATASET, load_dataset
 from blackbox.evals.compare import ComparisonError, compare
-from blackbox.evals.runner import run_evaluation
+from blackbox.evals.runner import rescore_evaluation, run_evaluation
 from blackbox.models import EvalCaseResult
 from blackbox.store.db import Store
 from blackbox.telemetry.setup import Telemetry
@@ -39,6 +40,25 @@ def _check_ollama(host: str, model: str) -> None:
 
 def _seconds(ms: float | None) -> str:
     return "-" if ms is None else f"{ms / 1000:.1f}s"
+
+
+def _rescore(eval_id: str, dataset_name: str) -> None:
+    settings = get_settings()
+    store = Store(settings.db_path)
+    try:
+        source = store.get_eval_report(eval_id)
+        if source is None:
+            sys.exit(f"No evaluation {eval_id!r} in {settings.db_path}")
+        try:
+            new_id = rescore_evaluation(store, source, load_dataset(dataset_name))
+        except ValueError as exc:
+            sys.exit(f"Cannot rescore: {exc}")
+        report = store.get_eval_report(new_id)
+        assert report is not None
+        print(f"{new_id} [{report.variant}] rescored from {eval_id} against {report.dataset_version} ({report.dataset_hash}): "
+              f"{report.n_passed}/{report.n_cases} passed (was {source.n_passed}/{source.n_cases} on {source.dataset_version})")
+    finally:
+        store.close()
 
 
 def _compare(baseline_id: str, candidate_id: str) -> None:
@@ -82,16 +102,21 @@ def main(argv: list[str] | None = None) -> None:
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run", help="run an evaluation batch")
     run.add_argument("--mode", choices=["ollama", "reference", "faults", "faultlab", "faultlab-ollama"], required=True)
-    run.add_argument("--dataset", default="golden-v2")
+    run.add_argument("--dataset", default=DEFAULT_DATASET)
     run.add_argument("--cases", help="comma-separated case ids (default: all)")
     run.add_argument("--variant", choices=list(PRESETS), default="baseline", help="agent configuration (default: baseline)")
     cmp = sub.add_parser("compare", help="before/after of two stored evaluations")
     cmp.add_argument("baseline")
     cmp.add_argument("candidate")
+    rescore = sub.add_parser("rescore", help="judge the stored runs of an evaluation against another dataset version")
+    rescore.add_argument("eval_id")
+    rescore.add_argument("--dataset", default=DEFAULT_DATASET)
     args = parser.parse_args(argv)
 
     if args.command == "compare":
         return _compare(args.baseline, args.candidate)
+    if args.command == "rescore":
+        return _rescore(args.eval_id, args.dataset)
 
     settings = get_settings()
     dataset = load_dataset(args.dataset)
