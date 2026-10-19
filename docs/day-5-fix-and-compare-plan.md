@@ -165,3 +165,80 @@ A measured before/after table exists, stored from real runs: four variants on th
 - **Deviation from section 7:** the persistent timeout is *not* a fifth lab fault. Run through the lab it would be scored by the localizer on a scripted run whose script ignores the error, which tests the script, not the agent. The retry limit is proven by unit tests instead (exactly 3 attempts) and no README number will quote it.
 - **Predictions held on the scripted lab** (written before the run, now a test): timeout and model failure run_failed -> no_effect, malformed output silent -> no_effect, wrong tool unchanged.
 - Tests: 17 new (`test_eval_compare.py`); 325 backend in all. Mutation-checked, all caught (the first pass had two survivors, one an equivalent mutation of mine and one a real gap in the "found by name, not text" test, both fixed): fixed/broken swapped, hash, model and seed checks dropped, lab judged by location, cost counting unmatched cases, retries not counted, tokens invented, validation kind comparable, migration skipped, variant not stored, retried tier removed, retried found by text, API returning 200 for a refusal.
+
+### Stage 5: real-model results (2026-10-19, `qwen2.5:7b`, temperature 0, seed 0; code = commit `0035a2f`)
+
+All numbers are from stored evaluations; `python -m blackbox.evals compare <baseline> <candidate>` reproduces any row.
+
+**Noise floor.** Baseline against the Day 3 baseline (eval-5b8f6d3c vs eval-7410381c): **0 of 24 cases flipped**. `full` against `full` (eval-67a0cc90 vs eval-a37cc205): **0 of 24 flipped**. At temperature 0 this model repeated every verdict, so every difference below is a real difference, not noise (one model, one machine, two repeats: evidence, not a guarantee).
+
+**Golden-v2, 24 cases** (fixed / broken are against `baseline`, eval-7410381c):
+
+| Variant | Passed | Fixed | Broken | Policy check | Task check | Tool calls | Model calls | Median run |
+|---|---|---|---|---|---|---|---|---|
+| baseline | 19/24 | | | 21/24 | 22/24 | 39 | 62 | 10.3 s |
+| resilient (eval-7caf9bfa) | 19/24 | 0 | 0 | 21/24 | 22/24 | 39 | 62 | 10.3 s |
+| guided (eval-ff0b3df7) | 15/24 | 2 | 6 | **24/24** | **15/24** | 25 | 49 | 8.3 s |
+| full (eval-a37cc205) | 15/24 | 2 | 6 | 24/24 | 15/24 | 25 | 49 | 8.1 s |
+
+**Held-out set, 8 cases** (baseline eval-286fe069, 5/8): resilient (eval-ffb8d521) 5/8, 0 fixed, 0 broken; guided (eval-bfaf8088) 5/8, 1 fixed (H5), 1 broken (H1), policy 6/8 -> 8/8, task 7/8 -> 5/8; full (eval-26376285) identical to guided.
+
+**Failure lab on the real model** (baseline eval-7f1699f1: every fault hurt the run):
+
+| Fault | baseline | resilient (eval-0f9152b9) |
+|---|---|---|
+| tool timeout | run failed | **no effect** |
+| malformed tool output | silent | **no effect** |
+| model call fails | run failed | **no effect** |
+| wrong tool | policy failed | policy failed (unchanged, as predicted) |
+
+Cost of the three recoveries: 3 retries, tool calls 11 -> 13, model calls 14 -> 17, median run 11.3 -> 13.0 s. On clean runs (golden and held-out, resilient) the cost was exactly zero retries and identical call counts. Under `guided` and `full` the lab is uninformative: the control run itself fails, because the agent refuses the base refund task (see below), so every fault shows an effect (guided eval-4ac00a2b, full eval-1f6b2d31).
+
+**Against the predictions in section 6:**
+- Held: timeout and model failure recover; malformed output is caught; wrong tool unchanged; `resilient` changes nothing on cases with no infrastructure faults and costs nothing there.
+- Partly held: guidance fixed the lookup-first failures (N8, F2, H5; policy failures 3 -> 0 on golden, 2 -> 0 on held-out) but did **not** fix invented values (A2 still refunds an invented $10, H4 an invented $50) or the cannot-cancel case (W1).
+- **Did not hold: the regression prediction was too mild.** "At least one regression is plausible" turned out to be 6 of 24 on the golden set and 1 of 8 on the held-out set. Guidance made the agent worse overall (task completion 22/24 -> 15/24), and the held-out set confirms it, so it is not just the golden cases.
+
+**Why guidance regressed (read from the stored traces, not yet tested as a fix):**
+1. *A rule leaked from one tool to another.* The agent now says "we can only process refunds for undelivered orders" and refuses valid refunds on delivered orders (N1, N2, H1). The v2 text says an address can only change for an order not yet delivered; the model applied that to refunds. The agent made this policy up, which is the invention failure again, now caused by the prompt.
+2. *Over-asking.* "Ask, and take no action until they answer" made it ask for details the customer had already given (N7 "Where is order 49?", W3, W2), calling no tool at all.
+3. *The "ask instead of invent" rule did not stick for amounts* on this 7B model.
+
+**One incident.** In the first `full` run, case C1 took 47 minutes: the model backend stalled and the retry logic absorbed two real 300-second read timeouts, after which the case passed. Whether this was an Ollama stall or the laptop sleeping is unknown. It makes that run's total time (2,994 s) meaningless; use the median. It is also the only time a retry has been exercised by something other than a planted fault.
+
+**Limits.** One model, one machine, n = 24 and 8, one run per variant (plus the noise-floor repeats). The held-out set was not seen before v2, but is no longer clean for any v3, because v2's held-out results have now been read.
+
+### Stage 5b: guidance v3, the one labelled second attempt (2026-10-19)
+
+**What changed, and what did not.** v2 is frozen and pinned by a test, like v1 (its stored results describe it). v3 is written from the diagnosis above and nothing else, and it is the only second attempt: it is run once, on `guided-v3` and `full-v3`, and reported next to v2 whatever happens. Changes: each tool's rule is stated on its own ("never decide yourself whether a refund is allowed: call `check_refund_policy` and follow its answer"; "only an order that has not been delivered yet can have its shipping address changed"); the ask rule becomes "use what the customer already told you, ask only when something is genuinely missing"; the phrases "take no action until they answer" and "do not try a different action instead" are gone. The anti-answer-key test covers v3 too. The phrase "partial refund" appears in v3's tool text (as it did in v2's); it names a policy concept and is also the wording of one golden task, which is stated here rather than hidden.
+
+**Limits of this second attempt.** I had read v2's golden and held-out results before writing v3, so the held-out set is no longer a clean test for it: a v3 that does well on the held-out set is weaker evidence than v2's result was. Invented amounts are not expected to be fixed by wording (v2's attempt failed); a code-level check is a Day 7 option, not part of this.
+
+**Predictions, written before any v3 run:**
+- The refusal regression disappears: N1, N2 and H1 pass again.
+- The lookup-first gains are kept: policy compliance stays 24/24 on golden and 8/8 on the held-out set; N8, F2, H5 stay fixed.
+- The over-asking cases (N7, W2, W3) mostly recover.
+- Invented amounts (A2, H4) and the cannot-cancel case (W1) still fail.
+- Golden pass count: above the baseline's 19 if v3 works. If it is 19 or below, v3 failed and that is the result.
+- The lab on `full-v3`: the control passes, and the three recoverable faults behave as under `resilient` (3 fixed, wrong tool unchanged).
+
+### Stage 5b results: v3 did not work (2026-10-19, same model and settings; code = working tree after commit `0035a2f`)
+
+| Variant | Golden (24) | Fixed / broken vs baseline | Policy | Task | Held-out (8) | Held-out policy / task |
+|---|---|---|---|---|---|---|
+| baseline | 19 (eval-7410381c) | | 21/24 | 22/24 | 5 (eval-286fe069) | 6/8, 7/8 |
+| guided (v2) | 15 (eval-ff0b3df7) | 2 / 6 | 24/24 | 15/24 | 5 (eval-bfaf8088) | 8/8, 5/8 |
+| guided-v3 | 15 (eval-212048d0) | 1 / 5 | 24/24 | 15/24 | 5 (eval-dac487a9) | 7/8, 6/8 |
+| full-v3 | 15 (eval-a8e43948) | | | | 5 (eval-7d90c662) | |
+
+By the criterion written before the run (golden pass count above 19), **v3 failed.** It is the same count as v2 with different cases: against v2 it fixed 3 (N1, W2, W3) and broke 3 (W4, F2, C1).
+
+**Scorecard against the predictions:**
+- N1 recovered, as predicted. N2 and H1 did **not**: the agent still says "we can only issue refunds for undelivered orders" (N2) or declines (H1), so the invented rule survived the wording that was meant to remove it.
+- Policy compliance stayed 24/24 on golden, but on the held-out set it fell to 7/8 (H2 skipped the lookup again; v2 had 8/8). Not as predicted.
+- Over-asking: W2 and W3 recovered; N7 ("Where is order 49 right now?") still asks for an order number it was given.
+- A2 and H4 (invented amounts) and W1 (cannot cancel) still fail, as predicted: this model does not follow "ask instead of invent" from the prompt.
+- New failure: W4 ("What's your refund policy?") now asks for an order number instead of stating the policy (the baseline answered it).
+- Failure lab on `full-v3` (eval-55a817a2): the control passes, 3 faults fixed, 0 broken, wrong tool unchanged, as predicted. Cost: 3 retries, tool calls 11 -> 13, model calls 14 -> 17, median run 11.3 -> 14.2 s.
+
+**Triage finding (checker, not agent).** Two of the golden failures are the checker rejecting a correct answer, the same kind of gap as F1 and C2 on Day 3. C1 and C4 ask for a refund over the $100 limit and the agent correctly declines ("the policy does not allow a refund of $180 ... the maximum refund allowed is $100"), but the answer patterns for C1 and C4 only recognise "can't / cannot / unable / unfortunately / won't / limit". C2's patterns were widened for this on Day 3 and C1/C4 were not. Counted as correct, v2 would be 16/24 and v3 17/24 (baseline stays 19/24, whose answers already matched). N2, N7 and W4 are real failures. Nothing has been changed: any fix is a new dataset version (widening only, the old results staying under the old hash), and is an owner decision.

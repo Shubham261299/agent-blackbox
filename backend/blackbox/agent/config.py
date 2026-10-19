@@ -34,6 +34,10 @@ PRESETS: dict[str, AgentConfig] = {
     "guided": AgentConfig(name="guided", prompt_version="v2", tool_descriptions="v2"),
     "full": AgentConfig(name="full", retries=2, backoff_s=0.05, enforce_contracts=True,
                         prompt_version="v2", tool_descriptions="v2"),
+    # The second attempt at guidance, after v2 regressed (see agent/guidance.py). guided/full above stay on v2.
+    "guided-v3": AgentConfig(name="guided-v3", prompt_version="v3", tool_descriptions="v3"),
+    "full-v3": AgentConfig(name="full-v3", retries=2, backoff_s=0.05, enforce_contracts=True,
+                           prompt_version="v3", tool_descriptions="v3"),
 }
 
 
