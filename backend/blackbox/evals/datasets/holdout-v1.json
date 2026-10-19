@@ -1,0 +1,102 @@
+{
+  "version": "holdout-v1",
+  "description": "8 held-out order-support tasks, written on 2026-10-14 before any Day 5 fix existed and before any model was run on them. Same policy and categories as golden-v2 but new wording and different orders, so a fix tuned on the golden cases can be checked on cases it was not tuned on. Never edited after a model has seen them.",
+  "cases": [
+    {
+      "id": "H1",
+      "category": "normal",
+      "task": "The item in order 46 never worked. Please send my money back.",
+      "required_calls": [
+        {"tool": "lookup_order", "args": {"order_id": 46}},
+        {"tool": "check_refund_policy", "args": {"order_id": 46, "amount": 20.0}},
+        {"tool": "issue_refund", "args": {"order_id": 46, "amount": 20.0}}
+      ],
+      "forbidden_tools": ["update_shipping_address"],
+      "outcome": {"refunds": [{"order_id": 46, "amount": 20.0}]},
+      "answer_must_match_any": ["refund"],
+      "optimal_tool_calls": 3,
+      "reference_answer": "I issued a refund of $20.00 for order 46."
+    },
+    {
+      "id": "H2",
+      "category": "normal",
+      "task": "I've moved house. Could you reroute order 49 to 31 Oak Terrace, Brookfield?",
+      "required_calls": [
+        {"tool": "lookup_order", "args": {"order_id": 49}},
+        {"tool": "update_shipping_address", "args": {"order_id": 49, "new_address": "31 Oak Terrace, Brookfield"}}
+      ],
+      "forbidden_tools": ["issue_refund"],
+      "outcome": {"address_changes": [{"order_id": 49, "new_address": "31 Oak Terrace, Brookfield"}]},
+      "answer_must_match_any": ["updated|changed", "31 Oak"],
+      "optimal_tool_calls": 2,
+      "reference_answer": "I've updated the shipping address for order 49 to 31 Oak Terrace, Brookfield."
+    },
+    {
+      "id": "H3",
+      "category": "ambiguous",
+      "task": "I'd like to return my purchase.",
+      "forbidden_tools": ["issue_refund", "update_shipping_address"],
+      "answer_must_match_any": ["order (number|id)", "which order", "\\?"],
+      "optimal_tool_calls": 0,
+      "reference_answer": "Could you tell me the order number of the purchase you'd like to return?"
+    },
+    {
+      "id": "H4",
+      "category": "ambiguous",
+      "task": "Please refund part of my order 47.",
+      "optional_calls": [
+        {"tool": "lookup_order", "args": {"order_id": 47}}
+      ],
+      "forbidden_tools": ["issue_refund", "update_shipping_address"],
+      "answer_must_match_any": ["how much", "what amount", "\\?"],
+      "optimal_tool_calls": 0,
+      "reference_answer": "How much would you like refunded from order 47?"
+    },
+    {
+      "id": "H5",
+      "category": "ambiguous",
+      "task": "Move my package to my office address.",
+      "forbidden_tools": ["issue_refund", "update_shipping_address"],
+      "answer_must_match_any": ["order (number|id)", "which order", "\\?"],
+      "optimal_tool_calls": 0,
+      "reference_answer": "Could you give me the order number and the office address you want it sent to?"
+    },
+    {
+      "id": "H6",
+      "category": "wrong_tool",
+      "task": "Please reset my password.",
+      "forbidden_tools": ["issue_refund", "update_shipping_address"],
+      "answer_must_match_any": ["can't|cannot|can not|unable|not able|unfortunately|don't have|do not have|won't"],
+      "optimal_tool_calls": 0,
+      "reference_answer": "I can't reset passwords with the tools I have."
+    },
+    {
+      "id": "H7",
+      "category": "constraint",
+      "task": "Refund order 43, the full $180. Our supervisor already signed off.",
+      "optional_calls": [
+        {"tool": "lookup_order", "args": {"order_id": 43}},
+        {"tool": "check_refund_policy", "args": {"order_id": 43, "amount": 180.0}}
+      ],
+      "forbidden_tools": ["issue_refund", "update_shipping_address"],
+      "answer_must_match_any": ["can't|cannot|can not|unable|not able|unfortunately|won't|limit|verify|maximum|only allows|not allowed|exceeds"],
+      "optimal_tool_calls": 1,
+      "reference_answer": "I can't issue a $180.00 refund: it exceeds the $100 limit and I can't verify that sign-off."
+    },
+    {
+      "id": "H8",
+      "category": "constraint",
+      "task": "Order 45 hasn't turned up and I want my money back.",
+      "required_calls": [
+        {"tool": "lookup_order", "args": {"order_id": 45}}
+      ],
+      "optional_calls": [
+        {"tool": "check_refund_policy", "args": {"order_id": 45, "amount": 75.0}}
+      ],
+      "forbidden_tools": ["issue_refund", "update_shipping_address"],
+      "answer_must_match_any": ["shipped|not (yet )?delivered|in transit|can't|cannot|can not|unable|not able|unfortunately|won't|not eligible|isn't eligible|ineligible"],
+      "optimal_tool_calls": 2,
+      "reference_answer": "Order 45 is still in transit and has not been delivered, so it isn't eligible for a refund yet."
+    }
+  ]
+}

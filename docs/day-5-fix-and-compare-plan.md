@@ -1,0 +1,136 @@
+# Day 5 plan: fix and compare
+
+Status: **planned, not built.** The decisions in section 9 are proposed defaults, each cheap to change. Nothing here has been run yet, and the predictions in section 6 are written before any run on purpose.
+
+## 1. Goal
+
+Day 3 measured where the agent fails. Day 4 planted failures and located them. Day 5 closes the loop: **change the agent, then prove from recorded runs whether it got better, and what it cost.**
+
+The headline is a before/after table with three numbers that matter more than the pass rate alone:
+
+1. **Fixed:** cases that failed before and pass now.
+2. **Broken:** cases that passed before and fail now (the regression rate). A fix that breaks working cases is not a fix.
+3. **Cost:** extra model calls, tool calls and seconds.
+
+## 2. What we are fixing (from measured failures only)
+
+| Failure (source) | Cases / faults | Kind of fix |
+|---|---|---|
+| Acts on an order without looking it up | N6, N8, F2 (Day 3) | guidance |
+| Invents a missing value instead of asking | A2, A4, F3, F4 (Day 3) | guidance |
+| Never says it cannot cancel | W1 (Day 3) | guidance |
+| Tool timeout ends the run | `tool_timeout` (Day 4) | resilience: retry |
+| Model backend error ends the run | `model_error` (Day 4) | resilience: retry |
+| Malformed tool output passes silently | `malformed_output` (Day 4) | resilience: enforce contracts |
+| Wrong tool chosen | `wrong_tool` (Day 4) | **not targeted** (see predictions) |
+
+No fix is added for a failure nobody measured.
+
+## 3. The fix is two independent switches, not one
+
+One toggle would tell us "better", not **why**. So the agent takes an `AgentConfig` with two groups that can be turned on separately:
+
+| Group | Switches | Targets |
+|---|---|---|
+| **Resilience** | retry limit for tool and model infrastructure errors; runtime enforcement of the tool output contracts | the Day 4 lab faults |
+| **Guidance** | system prompt v2; tool descriptions v2 | the Day 3 benchmark failures |
+
+Four named variants: `baseline` (today's behaviour, byte for byte), `resilient`, `guided`, `full` (both). The ablation costs about 20 minutes of CPU and lets the report say which half did the work.
+
+`baseline` must stay exactly as it is, including the v1 prompt text and v1 tool descriptions, so every stored result stays reproducible and the existing 250 backend tests keep passing unchanged. That is the first test of this day.
+
+## 4. How each fix works
+
+### 4.1 Retry with a limit
+
+- Retried: `ToolTimeoutError`, `ModelUnavailableError`, and a contract violation (4.2).
+- **Not retried:** `ToolError` (a domain answer such as "order not found"). Asking again gives the same answer; the model should read it and decide.
+- Limit: 2 retries, so 3 attempts in all. Fixed small backoff (configurable, zero in tests). When the limit is spent the tool span ends in error and the agent receives `{"error": ...}`, the same as any tool failure, so the model can tell the customer instead of the run dying. For the model call the final failure ends the run as today.
+- **Trace shape does not change.** One tool span per tool call the model requested, one model span per step. Each failed attempt is an `exception`/`retry` event on that span (attempt number, error message), and the span carries an `agent.retry.count` attribute. This matters: `trace_completeness` ("models requested N calls, the trace has N tool spans") and `step_efficiency` would otherwise punish a retry as if the model had asked twice. The checks stay unchanged. The cost of a retry shows up honestly in duration and in the retry count.
+
+### 4.2 Contract enforcement at runtime
+
+After a tool returns, run `contract_problems` (already written on Day 4). A violation counts as a retryable failure. If every attempt violates, the span ends in error with a message that names the contract problem. The silent fault becomes a loud one the model can react to. `tool_output_contract` (the check) keeps working on stored traces as before.
+
+### 4.3 Guidance
+
+- **System prompt v2:** keeps the v1 rules and adds two plain rules: if the request does not state the order number, the amount or the new address, ask the customer for it and do not guess; if the request is something no tool can do (for example cancelling an order), say so.
+- **Tool descriptions v2:** each action tool says which fields must come from the customer and that `lookup_order` must come first.
+- **Hard rule for wording:** no order number, amount or phrase from any benchmark case may appear in the prompt. Otherwise the fix is a memorised answer key.
+
+## 5. How the comparison stays fair
+
+- Same dataset (the dataset hash must match), same model (`qwen2.5:7b`), same settings (temperature 0, seed 0). The comparison refuses two evaluations that differ in dataset hash or model.
+- **A held-out set, written before any tuning.** The 24 golden cases are where we saw the failures, so tuning a prompt against them and reporting on them is training on the test. `holdout-v1` is 8 new cases (3 ambiguous, 2 normal with different phrasing, 2 constraint, 1 wrong-tool), written first and run on `baseline` first. Report both: "on the cases we looked at" and "on cases written before we tuned".
+- **The dataset is never edited to flatter a variant.** The Day 3 triage rule still holds.
+- **Noise floor.** At temperature 0 the model is near-deterministic (Day 3: 23 of 24 answers identical on a rerun), so running different seeds changes nothing and "N repeats" would mean nothing. Instead, rerun `baseline` and `full` once more at identical settings and report how many cases flipped. A difference between variants smaller than that flip count is not evidence.
+- n is 24 plus 8. Report counts ("5 fixed, 1 broken"), not percentages presented as precise.
+
+## 6. Predictions, written before any run
+
+These are what the design implies. If a result differs, the report says so; we do not rewrite the prediction.
+
+| Item | Prediction | Why |
+|---|---|---|
+| `tool_timeout` | run fails → run completes | fault fires once, a retry succeeds |
+| `model_error` | run fails → run completes | same |
+| `malformed_output` | silent → still completes, one extra attempt, contract check passes | the bad reply is rejected and retried instead of reaching the model |
+| `wrong_tool` | unchanged | neither group addresses a wrong decision; if guidance helps here that is luck, say so |
+| a **persistent** timeout (fires every time) | run still ends, but in a bounded number of attempts | proves the limit is a limit |
+| Benchmark | some of the 5 gating failures fixed by `guided`; `resilient` changes nothing on the 24 cases (no infrastructure faults in them) | resilience cannot help where nothing infrastructure-shaped fails |
+| Regressions | at least one is plausible: a longer prompt can make a 7B model over-ask on cases that were fine | state the number whatever it is |
+| Cost | `resilient` costs nothing on a clean run; `guided` adds a little prompt processing time | |
+
+## 7. What gets built
+
+1. **`AgentConfig` and the four presets**, threaded through `RunService` and `AgentRunner`. The run and the evaluation record which variant produced them (a `variant` column on `runs` and `eval_runs`; `Store` has no migration step today, so add a guarded `ALTER TABLE`, and old rows read as `baseline`).
+2. **Resilience in the loop** (4.1, 4.2).
+3. **Guidance** (4.3), with the v1 text pinned by a test.
+4. **Injector:** a `persistent` option so a fault can fire on every matching call, to test the retry limit.
+5. **Runner and CLI:** `--variant baseline|resilient|guided|full` on every mode, a `holdout-v1` dataset, and `python -m blackbox.evals compare <baseline_eval> <candidate_eval>` that prints the table.
+6. **Compare logic and API:** `GET /evals/compare?baseline=...&candidate=...` computed from two stored evaluations (not stored itself). Returns headline counts, per-case before/after, per-check and per-category changes, and cost deltas (tool calls, model calls, median seconds, tokens where recorded).
+7. **Lab under variants:** the same four faults plus the persistent timeout, run on `baseline` and `full`, compared by effect (run failed / gating failed / silent / no effect) and cost.
+8. **UI: a comparison view.** Headline ("5 fixed, 1 broken, 18 unchanged"), a before/after strip per case with links to both runs, the ablation as a four-column table, the lab faults before and after, and the cost. A "recovered after N retries" chip on a span that retried. Design and artifact skills apply.
+
+Build order (each stage ends with its tests, mutation checks and a local-commit request): holdout dataset and baseline run on it → resilience + injector → guidance → plumbing, CLI, compare → real runs → UI → docs.
+
+## 8. Tests
+
+- `baseline` is unchanged: existing suites pass, prompt v1 and descriptions v1 are pinned byte for byte.
+- Retry: succeeds on attempt 2; spends exactly 3 attempts on a persistent fault (mutation: off by one); does **not** retry a `ToolError` (mutation: retry everything); event and attribute recorded; span count unchanged.
+- Contracts: enforced only when the switch is on; a malformed reply is retried; exhaustion yields an error span with the contract message.
+- Existing checks still hold on retried traces (completeness and efficiency do not penalize a retry).
+- Compare: counts fixed and broken correctly on hand-made evaluations; refuses a dataset-hash or model mismatch; handles cases present on one side only.
+- The lab on the scripted model: each fault's before/after effect matches section 6, so a wrong prediction fails a test visibly.
+- Frontend: comparison view states (loading, mismatch error, no change, all fixed, some broken).
+
+## 9. Decisions to confirm
+
+| # | Question | Proposed default |
+|---|---|---|
+| D1 | One toggle or several? | Two groups, four presets, so the result can be attributed |
+| D2 | Repeats per case | None at other seeds (meaningless at temperature 0). One identical-settings rerun of `baseline` and `full` as a noise floor |
+| D3 | Add a held-out set? | Yes, 8 cases, `holdout-v1`, written before tuning. Cut it if time is short and say so in the report |
+| D4 | A hard "look up first" guard in code? | **No, not in the first pass.** Guidance first. If N6/N8/F2 still fail, add a guard as a separately named step. Note that `policy_compliance` counts an attempted action even when blocked, so a guard would prevent harm but not move this score, and we will not loosen the check to make it |
+| D5 | Real wall-clock deadline on tools? | No. Tools are in memory and instant; the lab's timeout is a simulated error and the report says so. The model call already has the Ollama client's timeout |
+| D6 | Second model (`llama3.1:8b`) | Not now. A Day 7 item if time allows |
+
+## 10. Limits we will state
+
+- One model, n of 24 plus 8, one run per case. Small differences are noise; the flip count says how small.
+- The lab faults are simulated and fire once; real outages differ. The persistent timeout shows the limit works, not how real outages behave.
+- Guidance results belong to this prompt and this 7B model. A different model could move the other way.
+- Cases in the golden set were seen before tuning; only the held-out set was not.
+- `wrong_tool` is expected to stay unfixed; that is a result, not a gap to hide.
+
+## 11. Done when
+
+A measured before/after table exists, stored from real runs: four variants on the 24 golden cases and on the held-out set, the lab faults on `baseline` and `full`, and a noise-floor rerun. The comparison view shows it, with a link from every cell to the run behind it. Every README number later comes from these stored evaluations.
+
+## 12. Progress log
+
+### Stage 1: held-out set and baseline on it (done, 2026-10-14)
+
+- `holdout-v1` written first (8 cases: 2 normal, 3 ambiguous, 1 wrong-tool, 2 constraint; hash `8c7eb9ea4eb0`), before any fix existed. Tests (`test_eval_holdout.py`) check consistency, no overlap with golden-v2 ids or tasks, and that a scripted correct run of every case passes every check.
+- **Baseline on the held-out set** (`qwen2.5:7b`, temperature 0, seed 0): **5 of 8 passed both gating checks** (eval-286fe069, 190 s on CPU, including model load).
+- The 3 failures were triaged from the stored traces, and all are agent failures, not dataset errors: H2 changed an address without looking the order up; H4 ("refund part of order 47") invented a $30 amount and refunded it; H5 ("move my package to my office address") invented order id 12345 and tried to change its address. These are the same classes as the golden-set failures, so the held-out set can tell whether guidance generalizes.
