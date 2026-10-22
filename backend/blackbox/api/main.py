@@ -9,11 +9,9 @@ from blackbox.agent.config import AgentConfig, preset
 from blackbox.agent.service import RunService
 from blackbox.config import Settings, get_settings
 from blackbox.evals.cases import load_dataset
-from blackbox.evals.checks import evaluate_generic
 from blackbox.evals.compare import ComparisonError, compare
-from blackbox.evals.localize import locate
+from blackbox.evals.run_evaluation import build_run_evaluation
 from blackbox.evals.runner import execute_evaluation, prepare_evaluation
-from blackbox.evals.trajectory import build_trajectory
 from blackbox.llm.base import ModelClient
 from blackbox.llm.ollama_client import OllamaClient
 from blackbox.llm.scripted import SCENARIO_INFO, scripted_model
@@ -114,14 +112,7 @@ def create_app(
         found = store.find_eval_case_for_run(run_id)
         if run.status == "running" and not found:
             raise HTTPException(status_code=409, detail="run is still running")
-        traj = build_trajectory(run, store.get_spans(run_id))
-        if found:
-            eval_id, case_id = found
-            checks = store.get_case_checks(eval_id, case_id)
-            return RunEvaluation(run_id=run_id, eval_id=eval_id, case_id=case_id, stored=True, checks=checks,
-                                 suspects=locate(traj, checks))
-        checks = evaluate_generic(traj)
-        return RunEvaluation(run_id=run_id, stored=False, checks=checks, suspects=locate(traj, checks))
+        return build_run_evaluation(store, run, found)
 
     @app.get("/runs/{run_id}/faults", response_model=list[RunFault])
     def get_run_faults(run_id: str) -> list[RunFault]:

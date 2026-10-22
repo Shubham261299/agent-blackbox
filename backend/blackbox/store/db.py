@@ -1,6 +1,7 @@
 import json
 import sqlite3
 import threading
+from collections.abc import Collection
 
 from blackbox.config import ensure_parent_dir
 from blackbox.models import (
@@ -328,12 +329,17 @@ class Store:
             categories=[CategorySummary(category=k, passed=sum(v), total=len(v)) for k, v in categories.items()],
         )
 
-    def find_eval_case_for_run(self, run_id: str) -> tuple[str, str] | None:
+    def find_eval_case_for_run(self, run_id: str, among: Collection[str] | None = None) -> tuple[str, str] | None:
+        """The latest evaluation case that ran this run (a rescored evaluation reuses the runs of the one it was
+        rescored from). `among` limits the search to some evaluations, for an export that only holds a few."""
         with self._lock:
-            row = self._db.execute(
-                "SELECT eval_id, case_id FROM eval_cases WHERE run_id=? ORDER BY rowid DESC LIMIT 1", (run_id,)
-            ).fetchone()
-        return (row["eval_id"], row["case_id"]) if row else None
+            rows = self._db.execute(
+                "SELECT eval_id, case_id FROM eval_cases WHERE run_id=? ORDER BY rowid DESC", (run_id,)
+            ).fetchall()
+        for row in rows:
+            if among is None or row["eval_id"] in among:
+                return row["eval_id"], row["case_id"]
+        return None
 
     def get_case_checks(self, eval_id: str, case_id: str) -> list[CheckResult]:
         with self._lock:
