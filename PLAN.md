@@ -12,7 +12,7 @@
 | 3 | Evaluation | done, pushed | `92d7e3a`, `ba26ea0`, `dc67159` |
 | 4 | Failure lab | done, pushed | `1335e6d` backend, `3dc832d` UI, plus the docs commit |
 | 5 | Fix and compare | done, not pushed | `ac2d019`, `2c9e27b`, `0554030`, `0035a2f`, `7d88e71`, `1dc1377`, plus the stage 6 UI commit |
-| 6 | Showcase | **next** | |
+| 6 | Showcase | in progress (stage 0 done) | |
 | 7 | Buffer / stretch | not started | |
 
 **Standing rules from the owner (do not break):**
@@ -25,7 +25,7 @@
 - Decisions already taken: 24 golden cases (golden-v3 current: golden-v2 with C1/C4 answer patterns widened after triage; v2 stays loadable), option B (only the order id of an address change is verified; keyed digest "option A" is a later extension), judged DeepEval subset of 6 on Day 7, qwen2.5:7b only.
 
 **How to run things (Windows, from the repo root; venv is `.venv`):**
-- Tests: `.venv\Scripts\python -m pytest` (376 backend, 1 needs Jaeger) and `cd frontend; npm test` (128), `npx tsc --noEmit`, `npm run build`.
+- Tests: `.venv\Scripts\python -m pytest` (387 backend, 1 needs Jaeger) and `cd frontend; npm test` (128), `npx tsc --noEmit`, `npm run build`.
 - API: `uvicorn --app-dir backend --factory blackbox.api.main:create_app --port 8000`; UI: `cd frontend; npm run dev` (port 5173). **Ports 8000, 8001 and 8765 are used by other projects on this machine** (check with `Get-NetTCPConnection -LocalPort <p> -State Listen` before starting; never kill a process you did not start). Pick a free port, start the API on it, and point the UI at it: `$env:BLACKBOX_API="http://127.0.0.1:<port>"; npm run dev -- --port 5190 --strictPort`. The Windows venv launcher spawns a child process, so record the listener PID (not just the launcher) to stop it.
 - Jaeger: `docker compose up -d` (container `jaeger`, UI 16686; no restart policy, start it again after a Docker restart).
 - Evaluations: `python -m blackbox.evals run --mode reference|faults|ollama|faultlab|faultlab-ollama [--variant baseline|resilient|guided|full|guided-v3|full-v3] [--dataset golden-v3|holdout-v1]`; `compare <before> <after>`; `rescore <eval> --dataset golden-v3`. Real-model runs take minutes on CPU.
@@ -109,7 +109,8 @@ Rough target, ordered by what the audience sees first. A day is done only when i
 - **Results (qwen2.5:7b, seed 0, golden-v3, 24 cases):** baseline 19; resilient 19 (0 fixed, 0 broken, no cost on clean runs); guided v2 16 (2 fixed, 5 broken); guided v3 17 (1 fixed, 3 broken). On the real-model failure lab, resilient turned timeout, model failure and malformed output from harmful to harmless (3 fixed, 0 broken; cost 3 retries, +15% median time). Guidance removed every policy violation but cost task completion (22 -> 16/17 of 24). **Recommended agent: resilient.**
 - Limits: one model, n = 24 + 8, one run per variant; the held-out set was not clean for v3 (v2's results were read first). Invented amounts and the cannot-cancel case are not fixed by prompt wording: a code-level guard (lookup-first enforcement, grounding every tool argument in the customer's message) is a Day 7 option.
 
-## Day 6 — Showcase
+## Day 6 — Showcase (in progress; plan and decisions in [docs/day-6-showcase-plan.md](docs/day-6-showcase-plan.md))
+- [x] Stage 0: dataset hashes ignore line endings (reproducible on any OS), stored hashes migrated, `.gitattributes`; 387 backend tests
 - [ ] Static demo mode with prebaked real runs (DataSource interface already allows it), deployed on free hosting
 - [ ] Demo video/GIF (agent runs -> tool fails -> click red span -> score drops -> fix -> improves)
 - [ ] Screenshots, README (plain-language top, technical below), Docker Compose for the whole stack

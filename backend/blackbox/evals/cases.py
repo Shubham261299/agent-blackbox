@@ -65,7 +65,36 @@ class Dataset(BaseModel):
 DEFAULT_DATASET = "golden-v3"
 
 
+def _lf(raw: bytes) -> bytes:
+    return raw.replace(b"\r\n", b"\n")
+
+
+def content_hash(raw: bytes) -> str:
+    """Identifies the content of a dataset file, not how a particular machine stored its line endings.
+
+    The hash used to be taken from the raw bytes. Git checks files out with CRLF on Windows and LF everywhere else,
+    so the same cases hashed differently on different machines, and the comparison page (which refuses two
+    evaluations with different hashes) would have rejected a run made on a Mac, on Linux or in Docker against
+    numbers made on Windows. Line endings are normalised first, so the hash is the same everywhere.
+    """
+    return hashlib.sha256(_lf(raw)).hexdigest()[:12]
+
+
+def legacy_content_hash(raw: bytes) -> str:
+    """What Day 3-5 stored on Windows: the hash of the CRLF form of the file. Kept only to migrate those rows."""
+    return hashlib.sha256(_lf(raw).replace(b"\n", b"\r\n")).hexdigest()[:12]
+
+
+def dataset_hash_migrations(directory: Path = DATASETS_DIR) -> list[tuple[str, str, str]]:
+    """(dataset version, hash stored by the old scheme, hash now) for every dataset file."""
+    out = []
+    for path in sorted(directory.glob("*.json")):
+        raw = path.read_bytes()
+        out.append((path.stem, legacy_content_hash(raw), content_hash(raw)))
+    return out
+
+
 def load_dataset(name: str = DEFAULT_DATASET, directory: Path = DATASETS_DIR) -> Dataset:
     raw = (directory / f"{name}.json").read_bytes()
     dataset = Dataset.model_validate(json.loads(raw))
-    return dataset.model_copy(update={"content_hash": hashlib.sha256(raw).hexdigest()[:12]})
+    return dataset.model_copy(update={"content_hash": content_hash(raw)})

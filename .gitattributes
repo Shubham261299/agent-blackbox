@@ -1,0 +1,10 @@
+# One line-ending convention for the whole repository. A dataset file's hash ignores line endings
+# (backend/blackbox/evals/cases.py), but keeping the files consistent avoids noisy diffs and surprises.
+* text=auto eol=lf
+
+# binary files are never converted
+*.png binary
+*.gif binary
+*.jpg binary
+*.ico binary
+*.woff2 binary

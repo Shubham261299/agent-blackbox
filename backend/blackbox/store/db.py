@@ -110,6 +110,7 @@ class Store:
                 self._db.execute("PRAGMA journal_mode=WAL")
             self._db.executescript(SCHEMA)
             self._add_missing_columns()
+            self._migrate_dataset_hashes()
 
     def _add_missing_columns(self) -> None:
         """Databases made before a column existed keep working: CREATE TABLE IF NOT EXISTS does not add columns, so
@@ -122,6 +123,17 @@ class Store:
             have = {row[1] for row in self._db.execute(f"PRAGMA table_info({table})")}
             if column not in have:
                 self._db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        self._db.commit()
+
+    def _migrate_dataset_hashes(self) -> None:
+        """Evaluations made before the hash ignored line endings stored the Windows (CRLF) hash. Rewrite exactly those
+        rows to the hash the same content has everywhere now, so old and new evaluations stay comparable. A row is only
+        touched when its version and its stored hash both match the old scheme, so it is safe to run on every start."""
+        from blackbox.evals.cases import dataset_hash_migrations
+
+        for version, old, new in dataset_hash_migrations():
+            if old != new:
+                self._db.execute("UPDATE eval_runs SET dataset_hash=? WHERE dataset_version=? AND dataset_hash=?", (new, version, old))
         self._db.commit()
 
     def close(self) -> None:

@@ -1,0 +1,184 @@
+# Day 6 plan: showcase
+
+Status: **approved 2026-10-21, in progress.** All ten decisions in section 9 were approved as proposed (recorded there). Stage 0 is done; see the progress log at the end.
+
+## 1. Goal
+
+Day 1-5 built something a hiring manager cannot see unless they run it. Day 6 makes it **understandable in about a minute without installing anything**, and **verifiable in ten for a technical reviewer**.
+
+Two audiences, in this order:
+
+1. **Hiring managers and HR (no technical background assumed).** A live link that opens in a browser and tells the story, a README that starts in plain language, one short moving picture.
+2. **Technical reviewers.** The architecture, the stack, how to run it, and where every number came from.
+
+The story to tell is the one Day 5 earned, including the part that did not go well:
+
+> An AI agent runs. A tool fails. You click the red span and see why. The score drops. A fix absorbs the same failure, and the before/after page shows **3 faults fixed, 0 broken, at a stated cost**. A second fix, a better prompt, looked like an improvement and **made things worse**; the same tooling caught it, and the project reports it.
+
+Showing a fix that regressed, and the measurement that caught it, is the strongest thing in the project. The README leads with it, not around it.
+
+## 2. What exists today, and what is missing
+
+| Have | Missing |
+|---|---|
+| `DataSource` interface with `kind: "live" \| "demo"`; the shell already says "Recorded demo data" in demo mode; the start-run and start-evaluation panels are already hidden when a source cannot start them; hash routing (deployable as plain files) | a `DemoSource` that reads baked JSON; the baked JSON; a build mode for it |
+| A local database of real results: 343 runs, 1,666 spans, 31 evaluations, 3.8 MB (git-ignored, so a deployed site cannot read it) | a way to export a **curated, safe** subset into the repo |
+| Docker Compose with Jaeger only (image tag pinned, no restart policy) | the API and UI as services; one command to start everything |
+| Eight docs with the full results | a README, screenshots, a moving picture, a public link |
+| A public repo with no licence | a licence decision |
+
+Tooling facts that shape the plan: no `ffmpeg` and no Pillow on this machine, so a GIF cannot be made with what is installed today; Node 24 and Docker 29 are available; the GitHub CLI is logged in as the personal account with the `workflow` scope, so a Pages deployment workflow can be added from here.
+
+## 3. Step 0 (a prerequisite): make the numbers reproducible on another machine
+
+**A real problem found while planning.** A dataset's identity hash is computed from the raw bytes of its file. This machine converts line endings (`core.autocrlf=true`), so `golden-v3` hashes to `7bb5852c6198` here and would hash to `82acd02d8a18` on Linux, on macOS, and inside Docker. The comparison page refuses two evaluations with different dataset hashes, so anyone who clones the repo elsewhere and re-runs a benchmark could not compare it with the numbers in the README. `holdout-v1` happens to have LF endings and `golden-v2`/`v3` have CRLF, so the repo is also inconsistent with itself.
+
+**Fix.** Hash the content with line endings normalised to LF, add a `.gitattributes` so the files are stored consistently, and migrate the hashes already stored in the database (a one-off mapping old hash -> new hash for the three datasets). Evaluation ids do not change; the hash strings quoted in the docs are updated once. A test pins that CRLF and LF versions of the same content hash identically.
+
+This goes first because everything else (the baked demo data, the README's "reproduce this" instructions, Docker) quotes those hashes.
+
+## 4. Deliverables
+
+### A. The static demo (the main deliverable)
+
+**A1. Curated export.** A script (`python -m blackbox.export_demo`) writes JSON into `frontend/public/demo-data/` using the same functions the API uses (the store, `compare`, the localizer), so the demo shows what the API would. It exports a deliberately small set, not the whole database:
+
+| Group | Evaluations (stored ids) | Why |
+|---|---|---|
+| golden-v3 benchmark (24 cases) | baseline `eval-09d327ad`, resilient `eval-b07a0e6d`, guided v2 `eval-71224f4b`, guided v3 `eval-c45fdf03` | the headline comparison and both guidance attempts |
+| held-out benchmark (8 cases) | baseline `eval-286fe069`, resilient `eval-ffb8d521`, guided v3 `eval-dac487a9` | shows the held-out set was used |
+| real-model failure lab | baseline `eval-7f1699f1`, resilient `eval-0f9152b9` | the "same fault, absorbed" story |
+| reference and validation | one of each | shows how the checks themselves are tested |
+
+The `full` and `full-v3` variants are left out: on the golden set they give the same results as the guided ones, and fewer evaluations make a clearer story. The README says they exist and where to find them. That is about 160 runs and a thousand spans, roughly a megabyte of JSON (a fraction of that compressed). A handful of the scripted example runs from the original scenarios are added so the run list has a few clean examples.
+
+Each bake includes what the pages ask for: runs, spans, evaluations, each run's checks and suspects, the planted-fault ground truth for lab runs, and **precomputed comparisons** for a short list of useful pairs (baseline against each variant, per dataset, plus lab baseline against resilient).
+
+**A2. `DemoSource`.** Implements the existing `DataSource` interface over those files: `kind: "demo"`, cannot start runs or evaluations, no Jaeger links (the trace is already in the page). `compare(a, b)` looks up a precomputed pair and, for a pair that was not baked, shows the same plain-language refusal style: "this demo only includes these comparisons".
+
+**A3. Demo mode in the UI.** A build flag (`npm run build:demo`) selects the demo source, sets a relative base path so the site works under a project URL, and the shell banner already reads "Recorded demo data". Three additions, demo mode only:
+- a short **"Start here" card** on the landing page with four stops (see section 5) so a visitor is not dropped into a table of 160 runs;
+- an **"About this demo"** line: recorded from real local runs of `qwen2.5:7b` on a stated date, nothing here is live, link to the repository;
+- the existing links that need a live API (start a run, copy the API command) are replaced by text saying so.
+
+**A4. Privacy and honesty audit, as code.** The data is baked into a public site, so the export has a test that fails if it finds any of: the machine's user name, folder names from this machine, an email that is not `@example.com`, a drive-letter path, or a token-like string. Planning already found one thing to handle: 17 recorded stack traces contain the project's folder path after the home directory was scrubbed (`<user-home>\Local Folder\Personal\agent-blackbox\backend\...`). The export rewrites those to repository-relative paths (`backend/blackbox/...`) and the audit test then asserts none are left. The stored database is not modified.
+
+### B. README and screenshots
+
+A README with plain language first and technical detail below, in this order:
+
+1. One-sentence description and the **live demo link**.
+2. "What is this, for someone who has never debugged an AI agent" (about six sentences, no jargon).
+3. **The 60-second story**: three screenshots (a failed run with the red span, the before/after page for the resilient agent, the before/after page for the guidance that regressed), each with one sentence.
+4. **Results table**, every number from a stored evaluation with its id, and the sentence that the guidance did not work.
+5. "What I learned" (five short points: measure before fixing, write predictions first, a held-out set, check the checker, report regressions).
+6. How it works: one diagram (Mermaid, renders on GitHub): agent -> OpenTelemetry -> Jaeger + SQLite -> checks -> dashboard.
+7. Stack and why (Ollama locally, OpenTelemetry, Jaeger, FastAPI, React, deterministic checks; zero cost, no hosted model).
+8. Run it yourself (Compose, or the manual commands), and how to reproduce a number (`compare`).
+9. Limits, stated plainly (one model, small n, simulated faults, prompts tested on one 7B model).
+10. Repository map and links to the day-by-day docs.
+
+Screenshots come from the demo build in headless Edge (the same method used for every UI check so far), saved under `docs/images/`, each kept small.
+
+### C. A short moving picture
+
+No video tool is installed. Two ways, not exclusive:
+
+- **Automated animated GIF** built from real screenshots of the demo build (run list -> failed run with the red span -> evaluation -> before/after page -> the regression), with a caption on each frame. Reproducible and committed with the script that makes it. Needs one small development-only dependency (Pillow) installed in the project environment.
+- **A recorded video** made by the owner with the Windows screen recorder (Win+G) or any free recorder, following a written 60-second script I provide. Better for sharing on social platforms; not reproducible.
+
+### D. Hosting
+
+GitHub Pages from a GitHub Actions workflow in this repository: build the demo, upload the folder, deploy. Free for a public repository, the URL would be `https://shubham261299.github.io/agent-blackbox/`, and hash routing needs no server rules. Two actions are the owner's: enabling Pages with the Actions source in the repository settings, and the push that adds the workflow.
+
+Optional but cheap, and good for credibility: the same workflow runs the backend tests (Jaeger test skipped) and the frontend tests and build on every push, with a status badge in the README.
+
+### E. Docker Compose for the whole stack
+
+One `docker compose up --build` starting Jaeger (the existing pinned image, now with a restart policy), the API, and the UI (nginx serving the built app and forwarding `/api`). Ollama stays on the host, because the model and its memory belong to the machine, and the API reaches it through `host.docker.internal`. Notes that shape it:
+
+- The runtime image should not carry the whole test and judge toolchain. `pyproject.toml` currently lists pytest and DeepEval (a large dependency used only on Day 7) as ordinary dependencies. Proposed: move them to optional groups (`dev`, `judge`) so the API image installs only what it runs.
+- The database lives in a named volume so results survive a restart.
+- The README says which parts are Compose-able (everything except the local model) and that a benchmark still takes minutes on CPU.
+
+### F. Housekeeping
+
+Delete the leftover `backend/data/blackbox.db`; add `.gitattributes` and a `LICENSE` (decision below); a short `CONTRIBUTING`-style "how the days are organised" pointer is not needed, the docs already do that.
+
+## 5. The tour: what a visitor is shown
+
+Four stops on the landing card, each one link and one sentence:
+
+1. **A failed run.** A real run where a tool timed out: the red span is selected by default, and "Where to look first" points at it. *"The agent died here, and this is where to look."*
+2. **The failure lab.** Four planted faults: three end the run or break a rule, one (malformed output) raises no error at all and only the output-contract check notices it. Trace analysis ranks where to look for each. *"Some failures are loud, one is silent."*
+3. **Before and after: the fix that worked.** Baseline against resilient on the lab: 3 faults fixed, 0 broken, with the cost table. *"The agent now absorbs the failure, at a cost of three retries."*
+4. **Before and after: the fix that did not.** Baseline against the guided prompt on the 24 cases: 2 fixed, 5 broken. *"A better prompt looked like an improvement and was not. The page shows exactly which cases broke."*
+
+## 6. Rules for a public demo
+
+- Every number on the site and in the README comes from a stored evaluation and names its id. Nothing is typed in by hand.
+- The site says the data is recorded, from which model, on which date, and that nothing on it is live.
+- No private details: the audit test (A4) enforces this, and the export is regenerated rather than edited by hand.
+- The limits are in the README and on the comparison page, not buried.
+- Do not name or link the owner's other projects or other machines' services anywhere in the repository.
+
+## 7. Order of work, and what to cut
+
+Each stage ends with tests, a mutation check of anything that makes a decision, a look at the real rendered result, an update of PLAN.md and the day doc, and a request to commit.
+
+| Stage | Work | Done when |
+|---|---|---|
+| 0 | Reproducible dataset hashes (section 3) | the same hash on LF and CRLF, stored hashes migrated, docs updated |
+| 1 | Export script with the privacy audit, and the baked data | the audit passes, the bake loads with the existing models, size reported |
+| 2 | `DemoSource`, demo build, "Start here" card, About line | the full app works from static files with the API stopped, checked in the browser |
+| 3 | Screenshots and the README | every number in the README traces to an evaluation id |
+| 4 | GitHub Pages workflow (and optional CI) | the live URL opens the tour |
+| 5 | The GIF (and the recording script) | a captioned GIF in the README |
+| 6 | Docker Compose, dependency split, housekeeping | `docker compose up --build` gives a working stack |
+
+If time runs short, cut **from the bottom**: Compose first, then the GIF (a screenshot strip is enough), then CI. Stages 0 to 4 are the showcase.
+
+## 8. Tests
+
+- Hash: CRLF and LF versions of one dataset hash the same; the migration maps old hashes to new ones and leaves other rows alone.
+- Export: the privacy audit (each forbidden pattern is planted in a fixture and must fail the export); the output validates against the same models the API uses; every baked comparison names two baked evaluations; no baked run is missing its spans.
+- `DemoSource`: behaves like the API for every method the pages call; refuses to start runs; a comparison that was not baked gives the plain-language message.
+- UI: the landing card only appears in demo mode; the pages render from the demo source with no network; the start panels are absent.
+- Docker: a smoke test script (not part of pytest) that starts the stack, hits `/health`, and fetches one comparison.
+
+## 9. Decisions (all approved by the owner on 2026-10-21 as proposed)
+
+| # | Question | Proposed default |
+|---|---|---|
+| D1 | Hosting | GitHub Pages from an Actions workflow (free, same repo). Alternative: a static host such as Netlify or Cloudflare Pages |
+| D2 | How much to bake | The curated set in A1: 11 evaluations, about 160 runs. More makes the site heavier and the story blurrier |
+| D3 | Moving picture | Both: an automated captioned GIF (adds Pillow as a dev-only dependency) and a recording script for the owner's own video. **Approved, built after the core showcase (stages 0-4)** |
+| D4 | Hash fix | Normalise line endings before hashing and migrate stored hashes (changes the hash strings quoted in the docs once) |
+| D5 | Split dependencies | Move pytest and DeepEval to optional groups so the API image is small |
+| D6 | "Start here" card | Yes, in demo mode only, with the four stops in section 5 |
+| D7 | Licence | MIT, so the repository can be reused and reviewed freely. **Approved, with a condition:** verify the repository's ownership and any third-party content before adding the file |
+| D8 | CI on every push | Yes, tests and build, plus a badge. It is free for a public repository and shows the tests really run |
+| D9 | Tone of the README | Plain first, first person for "what I learned", no marketing language, limits stated |
+| D10 | Push timing | One push at the end of Day 6, as on Day 5. **Approved, with an exception:** push earlier if a hosting test is needed to catch Pages problems (stage 4) |
+
+## 10. Limits to state in the README
+
+- One model (`qwen2.5:7b`), one machine, 24 + 8 cases, one run per variant: the numbers show that the method works, not how any model in general behaves.
+- The lab's faults are simulated, fire once, and are planted in one task.
+- The prompt results belong to those two prompts and that model; a different model could move either way.
+- The demo is recorded: it cannot run an agent, and the comparison pairs are the ones baked.
+- A check can be wrong (one was, and was fixed under a new dataset version with the old results re-judged, never edited).
+
+## 11. Done when
+
+A stranger can open one link, follow four stops, and understand what was built, what worked, what did not, and how the numbers were measured; and a technical reviewer can clone the repository, start it with one command (or the manual steps), reproduce a comparison, and find the evaluation id behind every number in the README.
+
+## 12. Progress log
+
+### Stage 0: reproducible dataset hashes (done, 2026-10-21)
+
+- **The rule.** A dataset's hash is now taken after normalising line endings (`content_hash` in `evals/cases.py`), so the same cases hash the same on Windows, Linux, macOS and in Docker. Pinned by tests: `golden-v2` `c703c519168a`, `golden-v3` `82acd02d8a18`, `holdout-v1` `8c7eb9ea4eb0` (unchanged, it already had LF endings). What Days 3-5 stored on Windows was `e6a742cd5224` and `7bb5852c6198`.
+- **The migration.** On every `Store` start, evaluation rows whose dataset version and stored hash both match the old Windows value are rewritten to the new hash; nothing else is touched (a hash the old scheme never produced, or the same string under another dataset, is left alone), and running it again changes nothing. Dry-run on a copy of the real database first: 17 `golden-v2` and 8 `golden-v3` evaluations moved, 6 `holdout-v1` unchanged, 31 evaluations before and after. Then applied to the real database; `compare` still works and now prints the new hash. No evaluation result changed, only the identifier of the dataset content.
+- **`.gitattributes`** (`* text=auto eol=lf`, binary types listed) keeps the repository consistent from now on. Checked that it changes no committed file: staging a renormalised tree changed only the two intentionally edited source files.
+- **Docs.** No document quoted the old hashes (only one invented example message in a frontend test), so nothing needed rewriting.
+- **Tests:** 11 new (`test_dataset_hash.py`), 387 backend in all. Mutation-checked, all caught: hashing raw bytes again, a legacy hash equal to the new one, migration ignoring the version, migration rewriting every row of a version, migration never running, migration writing the wrong value.
