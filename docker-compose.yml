@@ -1,10 +1,50 @@
+# One command for everything except the model:  docker compose up --build   then open http://localhost:8080
+#
+# The model (Ollama) stays on your machine, where its models and memory already are. The API reaches it through
+# host.docker.internal; if it cannot, start Ollama listening on all interfaces (OLLAMA_HOST=0.0.0.0).
+# Scripted runs and the recorded evaluations do not need the model at all.
+#
+# Every published port can be changed from the environment, for a machine where the default is taken:
+#   BLACKBOX_PORT (dashboard, 8080), BLACKBOX_JAEGER_UI_PORT (16686), BLACKBOX_OTLP_HTTP_PORT (4318), BLACKBOX_OTLP_GRPC_PORT (4317)
 services:
   jaeger:
     # Jaeger v2: query API is /api/v3 (OTLP-shaped JSON); old /api/traces is gone.
     # Storage is in-memory: traces are lost on restart (the app keeps its own span copy in SQLite).
     image: jaegertracing/jaeger:2.22.0
-    container_name: jaeger
+    container_name: ${BLACKBOX_JAEGER_NAME:-jaeger}
+    restart: unless-stopped
     ports:
-      - "16686:16686"   # UI + query API
-      - "4317:4317"     # OTLP gRPC
-      - "4318:4318"     # OTLP HTTP
+      - "${BLACKBOX_JAEGER_UI_PORT:-16686}:16686"   # UI + query API
+      - "${BLACKBOX_OTLP_GRPC_PORT:-4317}:4317"     # OTLP gRPC
+      - "${BLACKBOX_OTLP_HTTP_PORT:-4318}:4318"     # OTLP HTTP
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    restart: unless-stopped
+    environment:
+      BLACKBOX_DB_PATH: /data/blackbox.db
+      BLACKBOX_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+      BLACKBOX_OLLAMA_HOST: ${BLACKBOX_OLLAMA_HOST:-http://host.docker.internal:11434}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # needed on Linux; Docker Desktop already provides it
+    volumes:
+      - blackbox-data:/data                   # results survive a restart
+    depends_on:
+      - jaeger
+    # No published port: the dashboard container forwards /api to it.
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    restart: unless-stopped
+    ports:
+      - "${BLACKBOX_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  blackbox-data:

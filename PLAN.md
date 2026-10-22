@@ -2,7 +2,7 @@
 
 ## Resume here (read this first in a new chat)
 
-**Status:** Days 0-5 done. Days 0-4 are pushed (`origin/main` = `10ff969`); Day 5 is committed locally and is pushed at the end of the day when the owner says so. Day 6 (showcase) is next and not started. Push only when the owner says so.
+**Status:** Days 0-6 done. Days 0-4 are pushed (`origin/main` = `10ff969`, then Day 5 `b10060b` was pushed by the owner); Day 6 (showcase) is committed locally and not pushed. Day 7 is optional. Push only when the owner says so.
 
 | Day | Topic | Status | Commits (local) |
 |---|---|---|---|
@@ -12,7 +12,7 @@
 | 3 | Evaluation | done, pushed | `92d7e3a`, `ba26ea0`, `dc67159` |
 | 4 | Failure lab | done, pushed | `1335e6d` backend, `3dc832d` UI, plus the docs commit |
 | 5 | Fix and compare | done, not pushed | `ac2d019`, `2c9e27b`, `0554030`, `0035a2f`, `7d88e71`, `1dc1377`, plus the stage 6 UI commit |
-| 6 | Showcase | in progress (stage 0 done) | |
+| 6 | Showcase | done, not pushed | `69a91b3`, `7184c9c`, `fefe05f`, `3ba5ed9`, `122c08f`, `e26194a`, plus the stage 6 commit |
 | 7 | Buffer / stretch | not started | |
 
 **Standing rules from the owner (do not break):**
@@ -25,9 +25,9 @@
 - Decisions already taken: 24 golden cases (golden-v3 current: golden-v2 with C1/C4 answer patterns widened after triage; v2 stays loadable), option B (only the order id of an address change is verified; keyed digest "option A" is a later extension), judged DeepEval subset of 6 on Day 7, qwen2.5:7b only.
 
 **How to run things (Windows, from the repo root; venv is `.venv`):**
-- Tests: `.venv\Scripts\python -m pytest` (484 backend, 1 needs Jaeger) and `cd frontend; npm test` (167), `npx tsc --noEmit`, `npm run build`.
+- Tests: `.venv\Scripts\python -m pytest` (504 backend, 1 needs Jaeger) and `cd frontend; npm test` (167), `npx tsc --noEmit`, `npm run build`.
 - API: `uvicorn --app-dir backend --factory blackbox.api.main:create_app --port 8000`; UI: `cd frontend; npm run dev` (port 5173). **Ports 8000, 8001 and 8765 are used by other projects on this machine** (check with `Get-NetTCPConnection -LocalPort <p> -State Listen` before starting; never kill a process you did not start). Pick a free port, start the API on it, and point the UI at it: `$env:BLACKBOX_API="http://127.0.0.1:<port>"; npm run dev -- --port 5190 --strictPort`. The Windows venv launcher spawns a child process, so record the listener PID (not just the launcher) to stop it.
-- Jaeger: `docker compose up -d` (container `jaeger`, UI 16686; no restart policy, start it again after a Docker restart).
+- Jaeger: `docker compose up -d jaeger` (container `jaeger`, UI 16686, restarts with Docker). The whole stack: `docker compose up --build` (dashboard on 8080; ports are movable by `BLACKBOX_*` variables, see docker-compose.yml). Install: `pip install -e .` runs the app, `".[dev]"` adds the tests and Pillow.
 - Evaluations: `python -m blackbox.evals run --mode reference|faults|ollama|faultlab|faultlab-ollama [--variant baseline|resilient|guided|full|guided-v3|full-v3] [--dataset golden-v3|holdout-v1]`; `compare <before> <after>`; `rescore <eval> --dataset golden-v3`. Real-model runs take minutes on CPU.
 - Start servers in the background and **record the PID; stop by PID with `taskkill /T`, never by port.** Database: `data/blackbox.db` (git-ignored).
 - Tooling quirks: multi-line patch scripts go in the scratchpad via the Write tool (Bash heredoc quoting is fragile); screenshots via headless Edge.
@@ -36,7 +36,7 @@
 
 **Stored real-model results (local DB, git-ignored; rerun if the DB is gone):** benchmark eval-5b8f6d3c (19/24), reference eval-b6676352 (24/24), scripted lab eval-3623c6ad (4/4), real-model lab eval-92639afd (4/4), validation eval-a5479ac6 (11/11), holdout baseline eval-286fe069 (5/8, holdout-v1). Day 5 variants on golden-v2: baseline eval-7410381c 19/24, resilient eval-7caf9bfa 19/24, guided eval-ff0b3df7 15/24, full eval-a37cc205 15/24 (and eval-67a0cc90); holdout: resilient eval-ffb8d521, guided eval-bfaf8088, full eval-26376285 (all 5/8); golden-v3 rescores of the above: baseline eval-09d327ad 19/24, resilient eval-b07a0e6d 19/24, guided eval-71224f4b 16/24, full eval-08ae09b9 16/24, guided-v3 eval-c45fdf03 17/24, full-v3 eval-1f87936d 17/24. v3: guided-v3 eval-212048d0 (golden 15/24) and eval-dac487a9 (holdout 5/8), full-v3 eval-a8e43948 (golden 15/24), eval-7d90c662 (holdout 5/8), lab eval-55a817a2 (4/4); real-model lab: baseline eval-7f1699f1, resilient eval-0f9152b9, guided eval-4ac00a2b, full eval-1f6b2d31.
 
-**Day 6 starting point (not yet planned in detail):** a static demo mode with prebaked real runs (the `DataSource` interface already allows it; add a `compare` entry to the baked data), a short demo video/GIF, README (plain language first, every number from a stored evaluation, limits stated), Docker Compose. The story to tell: the agent runs, a tool fails, click the red span, the score drops; the resilient agent absorbs the same fault, the compare page shows 3 faults fixed and 0 broken at a stated cost; and the honest counter-example, guidance that regressed and the harness that caught it. Day 7 candidates: code-level guards, DeepEval cross-check, judged subset.
+**Day 6 (done, not pushed):** the recorded demo (`python -m blackbox.export_demo`, `npm run build:demo`), README with screenshots and a GIF, CI and Pages workflows, Docker Compose, MIT licence. See docs/day-6-showcase-plan.md, sections 12 and 13. **Day 7 candidates:** code-level guards (lookup-first, argument grounding), DeepEval cross-check, a judged subset of 6.
 ---
 
 Rough target, ordered by what the audience sees first. A day is done only when its **Done when** is met. If something overruns, cut from stretch, not from Day 6.
@@ -109,17 +109,15 @@ Rough target, ordered by what the audience sees first. A day is done only when i
 - **Results (qwen2.5:7b, seed 0, golden-v3, 24 cases):** baseline 19; resilient 19 (0 fixed, 0 broken, no cost on clean runs); guided v2 16 (2 fixed, 5 broken); guided v3 17 (1 fixed, 3 broken). On the real-model failure lab, resilient turned timeout, model failure and malformed output from harmful to harmless (3 fixed, 0 broken; cost 3 retries, +15% median time). Guidance removed every policy violation but cost task completion (22 -> 16/17 of 24). **Recommended agent: resilient.**
 - Limits: one model, n = 24 + 8, one run per variant; the held-out set was not clean for v3 (v2's results were read first). Invented amounts and the cannot-cancel case are not fixed by prompt wording: a code-level guard (lookup-first enforcement, grounding every tool argument in the customer's message) is a Day 7 option.
 
-## Day 6 — Showcase (in progress; plan and decisions in [docs/day-6-showcase-plan.md](docs/day-6-showcase-plan.md))
+## Day 6 — Showcase (built, committed locally, not pushed; plan and decisions in [docs/day-6-showcase-plan.md](docs/day-6-showcase-plan.md))
 - [x] Stage 0: dataset hashes ignore line endings (reproducible on any OS), stored hashes migrated, `.gitattributes`; 387 backend tests
 - [x] Stage 1: `python -m blackbox.export_demo` bakes 173 runs, 11 evaluations and every pair of them through the real `compare` (20 fair, 101 refused with the API's reasons) into `frontend/public/demo-data/` (~2 MB), with a path rewrite and an independent privacy audit that also runs as a test over the committed data; 452 backend tests
 - [x] Stage 2: `DemoSource` over the baked files, `npm run build:demo` (relative paths, checked under a subfolder in headless Edge), a four-stop "Start here" card whose numbers come from the stored comparisons, an "About this demo" footer; 167 frontend tests
 - [x] Stage 3: README (plain language first, ids beside every number), three screenshots in `docs/images/`, and a test that checks the README's numbers and links against the demo data; 458 backend tests
 - [x] Stage 4: `ci.yml` (backend and frontend tests and builds) and `pages.yml` (deploy the demo), CI badge in the README; rehearsed on Linux in containers, not yet run on GitHub; 467 backend tests. Owner: enable Pages (Source: GitHub Actions) and push
 - [x] Stage 5: `scripts/make_demo_gif.py` (captioned GIF from real screenshots, captions from the data; Pillow as a dev-only extra), `docs/images/demo.gif` in the README, `docs/video-script.md` for the owner's recording; 484 backend tests
-- [ ] Static demo mode with prebaked real runs (DataSource interface already allows it), deployed on free hosting
-- [ ] Demo video/GIF (agent runs -> tool fails -> click red span -> score drops -> fix -> improves)
-- [ ] Screenshots, README (plain-language top, technical below), Docker Compose for the whole stack
-- [ ] Optional: restart policy for the Jaeger container; delete leftover `backend/data/blackbox.db`
+- [x] Stage 6: dependencies split (runtime / `dev` / `judge`), `docker compose up --build` for Jaeger + API + dashboard (run for real under a separate project name), MIT `LICENSE` and `THIRD_PARTY_NOTICES.md` after checking authorship and third-party content, leftover database removed; 504 backend tests
+- **Owner steps to go live:** confirm the licence name and that no employer has a claim; push; enable Pages (Settings, Pages, Source: GitHub Actions); check the CI and deploy workflows pass on GitHub (only rehearsed in containers so far); optionally record the video from `docs/video-script.md`.
 
 ## Day 7 — Buffer / stretch
 - [ ] DeepEval adapter; ToolCorrectnessMetric cross-check against our own check

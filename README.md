@@ -85,12 +85,22 @@ flowchart LR
 
 ## Run it yourself
 
-You need Python 3.12, Node 22 or newer (the tests need 22.12+), and, for real-model runs, [Ollama](https://ollama.com) with `ollama pull qwen2.5:7b`. Docker is only needed for Jaeger.
+For real-model runs you need [Ollama](https://ollama.com) on your machine with `ollama pull qwen2.5:7b`. Scripted runs, the recorded evaluations and the dashboard need no model.
+
+**With Docker (everything except the model):**
+
+```bash
+docker compose up --build          # dashboard on http://localhost:8080, Jaeger on http://localhost:16686
+```
+
+The API runs in a container and reaches Ollama on your machine through `host.docker.internal`; if it cannot, start Ollama listening on all interfaces (`OLLAMA_HOST=0.0.0.0`). Results are kept in a Docker volume. Each published port can be moved if it is taken (`BLACKBOX_PORT`, `BLACKBOX_JAEGER_UI_PORT`, and the two OTLP ports; see the comments in `docker-compose.yml`).
+
+**Without Docker** (needs Python 3.12 and Node 22.12 or newer; Docker is then only for Jaeger):
 
 ```bash
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
-pip install -e .
-docker compose up -d                                   # Jaeger on http://localhost:16686 (optional)
+pip install -e .                                       # what running it needs; add ".[dev]" to run the tests
+docker compose up -d jaeger                            # Jaeger on http://localhost:16686 (optional)
 uvicorn --app-dir backend --factory blackbox.api.main:create_app --port 8000
 cd frontend && npm install && npm run dev              # http://localhost:5173
 ```
@@ -115,6 +125,10 @@ To rebuild the recorded demo from your own database: `python -m blackbox.export_
 - The instruction results belong to those two prompts and this 7B model. A different model could move either way.
 - A check can be wrong. Two were, and were fixed in the open as described above.
 - The demo is a recording: it cannot run an agent, and it holds 11 of the 31 evaluations in my local database, chosen to tell the story. The others (including the variants that combine both fixes) are listed in [PLAN.md](PLAN.md) and [docs/day-5-fix-and-compare-plan.md](docs/day-5-fix-and-compare-plan.md).
+
+## Licence
+
+MIT, see [LICENSE](LICENSE). The code, test cases, screenshots and recorded data are original to this project; the open-source packages it depends on and their licences are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Repository map
 

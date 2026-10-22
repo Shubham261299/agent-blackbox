@@ -6,16 +6,20 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "opentelemetry-sdk==1.45.1",
     "opentelemetry-exporter-otlp==1.45.1",
-    "deepeval==4.2.8",
     "fastapi==0.143.0",
     "uvicorn==0.54.0",
     "ollama==0.6.3",
-    "pytest==9.1.1",
+    "httpx==0.28.1",  # imported directly (agent/errors.py); ollama also needs it
 ]
 
-# Development only: Pillow draws the captioned GIF (scripts/make_demo_gif.py). Nothing at run time needs it.
+# What running the app needs is above. Tests and the GIF script are `dev`; the judge model tooling (planned, not used by any
+# published number) is `judge`. Nothing at run time imports either.
 [project.optional-dependencies]
-dev = ["pillow==13.0.0"]
+dev = [
+    "pytest==9.1.1",
+    "pillow==13.0.0",  # draws the captioned GIF (scripts/make_demo_gif.py)
+]
+judge = ["deepeval==4.2.8"]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -33,7 +37,7 @@ include = ["blackbox*"]
 [tool.pytest.ini_options]
 pythonpath = ["backend"]
 testpaths = ["backend/tests"]
-# DeepEval auto-loads a pytest plugin that can emit anonymous telemetry; we call its metrics directly instead.
+# DeepEval (the optional `judge` extra) auto-loads a pytest plugin that can emit anonymous telemetry; we call its metrics directly instead.
 addopts = "-p no:deepeval"
 markers = [
     "integration: needs local Jaeger on :16686/:4318 (docker compose up -d jaeger)",

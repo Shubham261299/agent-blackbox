@@ -1,0 +1,15 @@
+# Keep the build context small and free of local state: the database, virtual environment, caches, git history.
+.git
+.github
+.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+*.egg-info
+data
+**/*.db
+frontend/node_modules
+frontend/dist
+frontend/dist-demo
+docs/images

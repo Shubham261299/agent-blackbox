@@ -2,12 +2,15 @@
 import os
 import sys
 
+import pytest
+
 
 def test_deepeval_pytest_plugin_is_disabled(pytestconfig):
     assert not pytestconfig.pluginmanager.hasplugin("deepeval")
 
 
 def test_deepeval_telemetry_is_opted_out():
+    pytest.importorskip("deepeval", reason="the optional `judge` extra is not installed")
     import blackbox  # noqa: F401  (sets the opt-out on import)
 
     assert os.environ["DEEPEVAL_TELEMETRY_OPT_OUT"] == "YES"
