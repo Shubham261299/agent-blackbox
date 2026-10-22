@@ -1,4 +1,4 @@
-import type { Comparison, EvalReport, EvalRunSummary, RunEvaluation, RunFault, RunRecord, RunRequest, ScenarioInfo, SpanRecord } from "./types";
+import type { Comparison, DemoManifest, EvalReport, EvalRunSummary, RunEvaluation, RunFault, RunRecord, RunRequest, ScenarioInfo, SpanRecord } from "./types";
 
 /**
  * Everything the UI reads goes through this interface, so a prebaked-JSON source (static demo)
@@ -23,6 +23,8 @@ export interface DataSource {
   startEval(mode: "reference" | "faults" | "faultlab"): Promise<EvalRunSummary>;
   /** Link to the same trace in Jaeger, when that backend exists. */
   traceUrl(traceId: string): string | null;
+  /** Demo only: what the recorded data is (model, dates, counts) and where the guided tour goes. */
+  demoInfo?(): Promise<DemoManifest>;
 }
 
 export class ApiError extends Error {

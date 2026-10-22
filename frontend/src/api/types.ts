@@ -253,3 +253,21 @@ export interface Comparison {
   baseline_cost: CostTotals;
   candidate_cost: CostTotals;
 }
+
+/** What the demo export says about itself (`manifest.json`). Demo only. */
+export interface DemoManifest {
+  format: number;
+  models: string[];
+  /** Dates (YYYY-MM-DD) the real-model runs were recorded between. */
+  recorded_from: string | null;
+  recorded_to: string | null;
+  counts: { runs: number; spans: number; evaluations: number; comparisons: number; refused_pairs: number };
+  evaluations: string[];
+  /** Where the four stops of the "Start here" card go; a stop is missing when the data does not hold it. */
+  tour: {
+    failed_run?: string;
+    lab?: string;
+    fixed?: [string, string];
+    regressed?: [string, string];
+  };
+}

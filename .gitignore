@@ -19,3 +19,5 @@ data/
 # frontend (Day 2)
 node_modules/
 dist/
+
+dist-demo/

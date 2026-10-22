@@ -2,12 +2,14 @@ import { ApiUnreachableError } from "../api/client";
 import { useDataSource } from "../api/context";
 import { ApiDown } from "../components/ApiDown";
 import { RunTable, StatStrip } from "../components/RunTable";
+import { StartHere } from "../components/StartHere";
 import { StartRunPanel } from "../components/StartRunPanel";
 import { useQuery } from "../hooks/useQuery";
 
 export function RunsPage() {
   const source = useDataSource();
-  const runs = useQuery(() => source.listRuns(), [source], { refetchMs: () => 4000 });
+  // A recorded demo never changes, so there is nothing to poll for.
+  const runs = useQuery(() => source.listRuns(), [source], { refetchMs: () => (source.kind === "demo" ? false : 4000) });
   const scenarios = useQuery(() => source.listScenarios(), [source]);
 
   const unreachable = runs.error instanceof ApiUnreachableError && !runs.data;
@@ -25,6 +27,7 @@ export function RunsPage() {
         <ApiDown onRetry={runs.refetch} />
       ) : (
         <>
+          {source.kind === "demo" && <StartHere />}
           {source.canStartRuns && <StartRunPanel scenarios={scenarios.data ?? []} />}
           {runs.loading && !runs.data ? (
             <p className="muted" role="status">

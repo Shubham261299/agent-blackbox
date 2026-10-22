@@ -16,7 +16,7 @@ const BENCHMARK_CMD = "python -m blackbox.evals run --mode ollama";
 export function EvalsPage() {
   const source = useDataSource();
   const evals = useQuery(() => source.listEvals(), [source], {
-    refetchMs: (data) => (data?.some((e) => e.status === "running") ? 2000 : 8000),
+    refetchMs: (data) => (source.kind === "demo" ? false : data?.some((e) => e.status === "running") ? 2000 : 8000),
   });
   const [busy, setBusy] = useState<"reference" | "faults" | "faultlab" | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -18,6 +18,8 @@ from blackbox.export_demo import (
     build_demo,
     check_files,
     export_demo,
+    note_run_ids,
+    tour,
     write_files,
 )
 from blackbox.llm.base import ModelResponse
@@ -175,6 +177,7 @@ def test_every_file_the_pages_need_is_built(two_evals):
         assert files[f"spans/{run_id}.json"] and files[f"run-evaluations/{run_id}.json"]["stored"]
     assert {e["eval_id"] for e in files["evals.json"]} == {a, b}
     assert files[f"evals/{a}.json"]["cases"] and files["scenarios.json"] and files["faults.json"] == {}
+    assert files["manifest.json"]["tour"] == {}  # these are not the curated evaluations
     assert files["manifest.json"]["counts"] == {"runs": 4, "spans": sum(len(files[f"spans/{r}.json"]) for r in run_ids),
                                                 "evaluations": 2, "comparisons": 2, "refused_pairs": 2}
 
@@ -250,6 +253,71 @@ def test_lab_runs_carry_their_planted_faults(file_service):
     service.store.save_run_faults(run_id, [fault])
     files = build_demo(service.store, [chosen])
     assert files["faults.json"] == {run_id: [fault.model_dump()]}
+
+
+# ---- lab control runs and the tour ----------------------------------------------------------------------
+def lab_note(service, control_id, faulted_id, fault="tool_timeout"):
+    return {"kind": "faultlab", "fault": fault, "effect": "run_failed",
+            "control": {"run_id": control_id}, "faulted": {"run_id": faulted_id}}
+
+
+def test_note_run_ids_reads_both_sides_and_nothing_else():
+    assert note_run_ids({"control": {"run_id": "run-a"}, "faulted": {"run_id": "run-b"}, "x": {"run_id": "run-c"}}) == ["run-a", "run-b"]
+    assert note_run_ids(None) == [] and note_run_ids({}) == [] and note_run_ids({"control": "text", "faulted": {}}) == []
+
+
+def test_a_lab_reports_control_run_is_exported_even_though_no_case_ran_it(file_service):
+    service, _ = file_service
+    # A real-model run that belongs to no evaluation, so it is not in the export as one of the scripted examples.
+    service.store.create_run(RunRecord(run_id="run-control", task="control", model="ollama:test", status="ok", started_at="2026-10-18T00:00:00+00:00"))
+    chosen = make_eval(service, {"N1": True})
+    case = service.store.get_eval_report(chosen).cases[0]
+    service.store.save_eval_case(chosen, case.model_copy(update={"case_id": "tool_timeout", "note": lab_note(service, "run-control", case.run_id)}))
+    files = build_demo(service.store, [chosen])
+    assert "run-control" in {r["run_id"] for r in files["runs.json"]}
+    files["runs.json"] = [r for r in files["runs.json"] if r["run_id"] != "run-control"]
+    with pytest.raises(ExportError, match="points at run run-control"):
+        check_files(files)
+
+
+def test_the_tour_points_at_the_failed_run_the_lab_and_the_two_comparisons():
+    lab_b, lab_r = CURATED["failure lab: baseline"], CURATED["failure lab: resilient"]
+    bench_b, bench_g = CURATED["benchmark golden-v3: baseline"], CURATED["benchmark golden-v3: guided v2"]
+
+    class Case:
+        def __init__(self, run_id, fault):
+            self.run_id, self.note = run_id, {"fault": fault}
+
+    class Report:
+        cases = [Case("run-1", "wrong_tool"), Case("run-2", "tool_timeout")]
+
+    assert tour({lab_b: Report, lab_r: Report, bench_b: Report, bench_g: Report}) == {
+        "failed_run": "run-2", "lab": lab_b, "fixed": [lab_b, lab_r], "regressed": [bench_b, bench_g]}
+    assert tour({lab_b: Report}) == {"failed_run": "run-2"}  # without the resilient lab there is no "fixed" stop
+    assert tour({}) == {}
+
+
+def test_the_manifest_carries_the_tour(two_evals, monkeypatch):
+    import blackbox.export_demo as module
+
+    service, a, b = two_evals
+    case = service.store.get_eval_report(a).cases[0]
+    service.store.save_eval_case(a, case.model_copy(update={"case_id": "tool_timeout", "note": lab_note(service, case.run_id, case.run_id)}))
+    for name, value in (("LAB_BASELINE", a), ("LAB_RESILIENT", b), ("BENCH_BASELINE", a), ("BENCH_GUIDED", b)):
+        monkeypatch.setattr(module, name, value)
+    manifest = build_demo(service.store, [a, b])[MANIFEST]
+    assert manifest["tour"] == {"failed_run": case.run_id, "lab": a, "fixed": [a, b], "regressed": [a, b]}
+
+
+def test_a_tour_pointing_at_something_that_was_not_exported_stops_the_export(two_evals):
+    service, a, b = two_evals
+    files = build_demo(service.store, [a, b])
+    files[MANIFEST]["tour"] = {"failed_run": "run-ghost"}
+    with pytest.raises(ExportError, match="tour points at run run-ghost"):
+        check_files(files)
+    files[MANIFEST]["tour"] = {"fixed": [a, "eval-ghost"]}
+    with pytest.raises(ExportError, match="was not baked"):
+        check_files(files)
 
 
 # ---- the guards before anything is written ------------------------------------------------------------

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Route } from "../hooks/useHashRoute";
 import { useTheme, type ThemePreference } from "../hooks/useTheme";
+import { AboutDemo } from "./AboutDemo";
 import { Icon } from "./Icon";
 
 const THEMES: { value: ThemePreference; label: string; icon: "monitor" | "sun" | "moon" }[] = [
@@ -67,6 +68,7 @@ export function Shell({ children, demo, route }: { children: ReactNode; demo: bo
         </div>
       </header>
       <main className="page">{children}</main>
+      {demo && <AboutDemo />}
     </div>
   );
 }

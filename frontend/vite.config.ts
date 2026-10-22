@@ -5,7 +5,12 @@ import { defineConfig } from "vite";
 // The UI calls "/api/..."; in dev, Vite forwards that to the FastAPI backend (no CORS needed).
 // BLACKBOX_API points it at another backend when port 8000 is taken.
 const apiTarget = process.env.BLACKBOX_API ?? "http://127.0.0.1:8000";
-export default defineConfig({
+// `vite build --mode demo` makes the static site for GitHub Pages: relative paths, so it works under a project URL, and the
+// recorded data from public/demo-data (the live build does not carry it).
+export default defineConfig(({ mode }) => ({
+  base: mode === "demo" ? "./" : "/",
+  publicDir: mode === "demo" ? "public" : false,
+  build: { outDir: mode === "demo" ? "dist-demo" : "dist" },
   plugins: [react()],
   server: {
     port: 5173,
@@ -23,4 +28,4 @@ export default defineConfig({
     globals: true,
     css: false,
   },
-});
+}));
