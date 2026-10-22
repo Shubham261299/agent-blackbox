@@ -1,3 +1,11 @@
+<div align="center">
+
+<img src=".github/banner.svg" width="100%" alt="Shubham AI Lab, system 09 (Open Source · MIT): Agent run → Recorded trace → Scrub + checks → Where it failed → Fix: better or worse?. Stack: Python, FastAPI, React, Ollama, Docker.">
+
+[🎬 Recorded demo](https://shubham261299.github.io/agent-blackbox/) · [🌐 Portfolio](https://shubham-ai-lab.vercel.app/) · [👤 GitHub profile](https://github.com/Shubham261299) · [💼 LinkedIn](https://www.linkedin.com/in/shubham-jamdar-2571271b3)
+
+</div>
+
 # Agent Blackbox
 
 [![CI](https://github.com/Shubham261299/agent-blackbox/actions/workflows/ci.yml/badge.svg)](https://github.com/Shubham261299/agent-blackbox/actions/workflows/ci.yml)
