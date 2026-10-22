@@ -1,5 +1,7 @@
 # Agent Blackbox
 
+[![CI](https://github.com/Shubham261299/agent-blackbox/actions/workflows/ci.yml/badge.svg)](https://github.com/Shubham261299/agent-blackbox/actions/workflows/ci.yml)
+
 A flight recorder for AI agents. It records every step an agent takes, checks the recording, shows where a run went wrong, and measures whether a fix made the agent better or worse. It runs on a laptop with a small local model and costs nothing.
 
 **[Open the recorded demo](https://shubham261299.github.io/agent-blackbox/)** (no install; it replays real recorded runs, nothing in it is live).
