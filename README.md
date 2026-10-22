@@ -6,6 +6,8 @@ A flight recorder for AI agents. It records every step an agent takes, checks th
 
 **[Open the recorded demo](https://shubham261299.github.io/agent-blackbox/)** (no install; it replays real recorded runs, nothing in it is live).
 
+![A captioned tour of the demo: a failed run, a fix that worked, a fix that did not](docs/images/demo.gif)
+
 ## What this is, in plain words
 
 An AI agent is a program that lets a language model decide what to do next: look up an order, issue a refund, answer a customer. When it goes wrong it is hard to say why. The model gave a strange answer, or a tool it called failed, or it skipped a step it was told never to skip. Without a record, you are guessing.

@@ -25,7 +25,7 @@
 - Decisions already taken: 24 golden cases (golden-v3 current: golden-v2 with C1/C4 answer patterns widened after triage; v2 stays loadable), option B (only the order id of an address change is verified; keyed digest "option A" is a later extension), judged DeepEval subset of 6 on Day 7, qwen2.5:7b only.
 
 **How to run things (Windows, from the repo root; venv is `.venv`):**
-- Tests: `.venv\Scripts\python -m pytest` (467 backend, 1 needs Jaeger) and `cd frontend; npm test` (167), `npx tsc --noEmit`, `npm run build`.
+- Tests: `.venv\Scripts\python -m pytest` (484 backend, 1 needs Jaeger) and `cd frontend; npm test` (167), `npx tsc --noEmit`, `npm run build`.
 - API: `uvicorn --app-dir backend --factory blackbox.api.main:create_app --port 8000`; UI: `cd frontend; npm run dev` (port 5173). **Ports 8000, 8001 and 8765 are used by other projects on this machine** (check with `Get-NetTCPConnection -LocalPort <p> -State Listen` before starting; never kill a process you did not start). Pick a free port, start the API on it, and point the UI at it: `$env:BLACKBOX_API="http://127.0.0.1:<port>"; npm run dev -- --port 5190 --strictPort`. The Windows venv launcher spawns a child process, so record the listener PID (not just the launcher) to stop it.
 - Jaeger: `docker compose up -d` (container `jaeger`, UI 16686; no restart policy, start it again after a Docker restart).
 - Evaluations: `python -m blackbox.evals run --mode reference|faults|ollama|faultlab|faultlab-ollama [--variant baseline|resilient|guided|full|guided-v3|full-v3] [--dataset golden-v3|holdout-v1]`; `compare <before> <after>`; `rescore <eval> --dataset golden-v3`. Real-model runs take minutes on CPU.
@@ -115,6 +115,7 @@ Rough target, ordered by what the audience sees first. A day is done only when i
 - [x] Stage 2: `DemoSource` over the baked files, `npm run build:demo` (relative paths, checked under a subfolder in headless Edge), a four-stop "Start here" card whose numbers come from the stored comparisons, an "About this demo" footer; 167 frontend tests
 - [x] Stage 3: README (plain language first, ids beside every number), three screenshots in `docs/images/`, and a test that checks the README's numbers and links against the demo data; 458 backend tests
 - [x] Stage 4: `ci.yml` (backend and frontend tests and builds) and `pages.yml` (deploy the demo), CI badge in the README; rehearsed on Linux in containers, not yet run on GitHub; 467 backend tests. Owner: enable Pages (Source: GitHub Actions) and push
+- [x] Stage 5: `scripts/make_demo_gif.py` (captioned GIF from real screenshots, captions from the data; Pillow as a dev-only extra), `docs/images/demo.gif` in the README, `docs/video-script.md` for the owner's recording; 484 backend tests
 - [ ] Static demo mode with prebaked real runs (DataSource interface already allows it), deployed on free hosting
 - [ ] Demo video/GIF (agent runs -> tool fails -> click red span -> score drops -> fix -> improves)
 - [ ] Screenshots, README (plain-language top, technical below), Docker Compose for the whole stack

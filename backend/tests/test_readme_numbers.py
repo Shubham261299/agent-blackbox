@@ -88,6 +88,6 @@ def test_links_into_the_demo_point_at_runs_and_comparisons_that_exist():
 
 def test_the_screenshots_the_readme_shows_exist():
     paths = [p for p in re.findall(r"!\[[^\]]*\]\(([^)]+)\)", README.read_text(encoding="utf-8")) if not p.startswith("http")]
-    assert len(paths) == 3
+    assert len(paths) == 4  # the tour GIF and the three screenshots
     for path in paths:
         assert (ROOT / path).is_file(), path
