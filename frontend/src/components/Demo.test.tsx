@@ -27,7 +27,7 @@ describe("AboutDemo", () => {
     await within(about).findByText(/qwen2\.5:7b/);
     expect(about).toHaveTextContent("recorded from real runs of the local model qwen2.5:7b, between 14 October 2026 and 19 October 2026");
     expect(about).toHaveTextContent("Nothing is live");
-    expect(about).toHaveTextContent("173 runs, 11 evaluations and 20 before-and-after comparisons");
+    expect(about).toHaveTextContent("173 runs, 11 sets of results and 20 before-and-after comparisons");
     expect(within(about).getByRole("link")).toHaveAttribute("href", REPO_URL);
   });
 

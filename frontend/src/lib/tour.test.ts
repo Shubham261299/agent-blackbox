@@ -25,14 +25,14 @@ describe("tourStops", () => {
 
   it("reads the numbers of the two before-and-after stops from the comparisons", () => {
     const [, , worked, didnt] = tourStops(TOUR, lab, bench);
-    expect(worked?.text).toContain("Of 4 planted faults, 3 now have no effect on the run and 0 were made worse, at a cost of 3 extra retries.");
+    expect(worked?.text).toContain("Of 4 planted problems, 3 now have no effect on the run and 0 were made worse, at a cost of 3 extra retries.");
     expect(didnt?.text).toContain("On 24 cases it fixed 2 and broke 5.");
   });
 
   it("uses the singular where there is one", () => {
     const one = comparison({ matched: 1, fixed: 1, broken: 1, baseline_cost: { ...comparison().baseline_cost, retries: 2 }, candidate_cost: { ...comparison().candidate_cost, retries: 3 } });
     const [, , worked, didnt] = tourStops(TOUR, one, one);
-    expect(worked?.text).toContain("Of 1 planted fault, 1 now has no effect on the run and 1 was made worse, at a cost of 1 extra retry.");
+    expect(worked?.text).toContain("Of 1 planted problem, 1 now has no effect on the run and 1 was made worse, at a cost of 1 extra retry.");
     expect(didnt?.text).toContain("On 1 case it fixed 1 and broke 1.");
   });
 

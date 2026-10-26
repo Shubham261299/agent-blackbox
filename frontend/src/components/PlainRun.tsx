@@ -1,5 +1,5 @@
 import type { RunEvaluation, RunRecord, SpanRecord } from "../api/types";
-import { runStory, stepTime } from "../content/plain";
+import { plainReason, runStory, stepTime } from "../content/plain";
 import { metricLabel } from "../lib/metrics";
 import { Icon } from "./Icon";
 import { PlainLead } from "./Plain";
@@ -34,7 +34,7 @@ export function PlainRun({ run, spans, evaluation }: { run: Pick<RunRecord, "sta
                 </p>
                 {s.failed && (
                   <p className="step-failed">
-                    <strong>This step failed.</strong> {s.detail && <span className="muted">It reported: {s.detail}</span>}
+                    <strong>This step failed.</strong> {s.detail && <span className="muted">It reported: {plainReason(s.detail)}</span>}
                   </p>
                 )}
               </div>

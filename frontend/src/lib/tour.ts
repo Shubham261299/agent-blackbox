@@ -30,7 +30,7 @@ export function tourStops(tour: DemoManifest["tour"], fixed?: Comparison, regres
     stops.push({
       title: "The failure lab",
       href: evalHref(tour.lab),
-      text: "Four faults were planted on purpose. Three stop the run or break a rule; one raises no error at all, and only a check on the tool’s output notices it.",
+      text: "Four problems were planted on purpose. Three stop the run or break a rule; one raises no error at all, and only a check on what the tool sent back notices it.",
       notice: "Each card is one planted problem, shown next to a run with nothing planted. One of them raised no error at all and was still caught.",
     });
   }
@@ -40,7 +40,7 @@ export function tourStops(tour: DemoManifest["tour"], fixed?: Comparison, regres
       title: "A fix that worked",
       href: compareHref(before, after),
       text: fixed
-        ? `Retrying a failed step. Of ${plural(fixed.matched, "planted fault", "planted faults")}, ${fixed.fixed} now ${fixed.fixed === 1 ? "has" : "have"} no effect on the run and ${fixed.broken} ${fixed.broken === 1 ? "was" : "were"} made worse, at a cost of ${plural(Math.max(0, fixed.candidate_cost.retries - fixed.baseline_cost.retries), "extra retry", "extra retries")}.`
+        ? `Retrying a failed step. Of ${plural(fixed.matched, "planted problem", "planted problems")}, ${fixed.fixed} now ${fixed.fixed === 1 ? "has" : "have"} no effect on the run and ${fixed.broken} ${fixed.broken === 1 ? "was" : "were"} made worse, at a cost of ${plural(Math.max(0, fixed.candidate_cost.retries - fixed.baseline_cost.retries), "extra retry", "extra retries")}.`
         : "Retrying a failed step. The page shows what was fixed, what got worse, and what it cost.",
       notice: "The big headline counts what got fixed and what got worse. Scroll down to see what the fix cost.",
     });
@@ -51,8 +51,8 @@ export function tourStops(tour: DemoManifest["tour"], fixed?: Comparison, regres
       title: "A fix that did not",
       href: compareHref(before, after),
       text: regressed
-        ? `A better prompt looked like an improvement. On ${plural(regressed.matched, "case", "cases")} it fixed ${regressed.fixed} and broke ${regressed.broken}. The page shows exactly which cases got worse.`
-        : "A better prompt looked like an improvement. The page shows which cases it fixed and which it broke.",
+        ? `A rewrite of the instructions looked like an improvement. On ${plural(regressed.matched, "case", "cases")} it fixed ${regressed.fixed} and broke ${regressed.broken}. The page shows exactly which cases got worse.`
+        : "A rewrite of the instructions looked like an improvement. The page shows which cases it fixed and which it broke.",
       notice: "Look at the red “Broken” rows: cases that passed before and fail now. A fix that breaks working cases is not free.",
     });
   }

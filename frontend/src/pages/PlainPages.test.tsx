@@ -1,7 +1,7 @@
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DataSource } from "../api/client";
+import { ApiError, type DataSource } from "../api/client";
 import { DataSourceContext } from "../api/context";
 import { PlainLead, Technical } from "../components/Plain";
 import { effectLabel, effectText, verdictText } from "../lib/notes";
@@ -22,7 +22,7 @@ const failedSpans = () => [
   span({ span_id: "root", name: "agent.run", span_type: "agent", status: "error" }),
   span({ span_id: "m1", parent_span_id: "root", name: "model.plan", span_type: "llm", duration_ms: 2000 }),
   span({ span_id: "t1", parent_span_id: "root", name: "tool.lookup_order", span_type: "tool", status: "ok", attributes: { "blackbox.tool.args": JSON.stringify({ order_id: 42 }) } }),
-  span({ span_id: "t2", parent_span_id: "root", name: "tool.check_refund_policy", span_type: "tool", status: "error", status_message: "ToolTimeoutError: timed out after 0.3s", duration_ms: 301,
+  span({ span_id: "t2", parent_span_id: "root", name: "tool.check_refund_policy", span_type: "tool", status: "error", status_message: "ToolTimeoutError: check_refund_policy timed out after 0.3s", duration_ms: 301,
     attributes: { "blackbox.tool.args": JSON.stringify({ order_id: 42 }) } }),
 ];
 
@@ -89,7 +89,7 @@ describe("a run in the demo", () => {
       expect.stringContaining("Looked up order 42"),
       expect.stringContaining("Checked the refund policy for order 42"),
     ]);
-    expect(steps[2]).toHaveTextContent("This step failed. It reported: ToolTimeoutError: timed out after 0.3s");
+    expect(steps[2]).toHaveTextContent("This step failed. It reported: The refund policy check did not answer within 0.3 seconds.");
     const verdicts = screen.getByRole("list", { name: "What the checks said" });
     expect(verdicts).toHaveTextContent("Finished the job: No");
     expect(verdicts).toHaveTextContent("Followed the rules: Yes");
@@ -307,7 +307,7 @@ describe("the failure lab in the demo", () => {
   it("says planted problem and step where it said fault and span, and keeps the technical span name out", async () => {
     setPlainWords(true);
     lab();
-    const timeout = await screen.findByRole("article", { name: "Tool timeout" });
+    const timeout = await screen.findByRole("article", { name: "A tool times out" });
     expect(screen.getByText("planted problems pointed at the right step")).toBeInTheDocument();
     expect(within(timeout).getByRole("heading", { name: "Where the analysis says to look" })).toBeInTheDocument();
     expect(within(timeout).getByRole("columnheader", { name: "With the problem" })).toBeInTheDocument();
@@ -324,7 +324,7 @@ describe("the failure lab in the demo", () => {
   it("explains a silent problem as one that went unnoticed", async () => {
     setPlainWords(true);
     lab();
-    const silent = await screen.findByRole("article", { name: "Malformed tool output" });
+    const silent = await screen.findByRole("article", { name: "A tool sends back garbage" });
     expect(within(silent).getByText("Went unnoticed", { selector: ".pill" })).toBeInTheDocument();
     expect(within(silent).getByText(/looked fine on both pass-or-fail rules/)).toBeInTheDocument();
     expect(within(silent).getByText(/its answer could not be used/)).toBeInTheDocument();
@@ -361,6 +361,62 @@ describe("what a problem did, in each mode", () => {
     expect(verdictText(faultLabNote({ rank: 3, hit_at_1: false }))).toBe("The planted step was the analysis's number 3 suggestion, not the first.");
     expect(verdictText(faultLabNote({ rank: null, hit_at_1: false }))).toBe("The planted step was not among the analysis's suggestions.");
     expect(verdictText(faultLabNote({ fired: false, rank: null }))).toBe("The problem never happened, so there is nothing to find.");
+  });
+});
+
+describe("errors and refusals in the demo", () => {
+  it("says what went wrong in a failed run in everyday words, and shows the code's message in the live app", async () => {
+    setPlainWords(true);
+    page(runSource(), <RunDetailPage runId="run-x" />);
+    const card = (await screen.findByText("Run failed")).closest("section") as HTMLElement;
+    expect(card).toHaveTextContent("The refund policy check did not answer within 0.3 seconds.");
+    expect(card).not.toHaveTextContent("ToolTimeoutError");
+    cleanup();
+    setPlainWords(false);
+    page(runSource({ kind: "live" }), <RunDetailPage runId="run-x" />);
+    expect((await screen.findByText("Run failed")).closest("section")).toHaveTextContent("ToolTimeoutError: check_refund_policy timed out after 0.3s");
+  });
+
+  it("explains the reason a step failed with the same words", async () => {
+    setPlainWords(true);
+    page(runSource(), <RunDetailPage runId="run-x" />);
+    const steps = within(await screen.findByRole("list", { name: "Steps" })).getAllByRole("listitem");
+    expect(steps[2]).toHaveTextContent("It reported: The refund policy check did not answer within 0.3 seconds.");
+  });
+
+  it("gives a refused pair's reason without hashes, and the demo's own words around it", async () => {
+    setPlainWords(true);
+    const refused = new ApiError("They ran different cases (golden-v3 82acd02d8a18 against holdout-v1 8c7eb9ea4eb0), so the difference could come from the test.", 422);
+    page(fakeSource({ kind: "demo", compare: vi.fn().mockRejectedValue(refused) }), <ComparePage baselineId="eval-a" candidateId="eval-b" />);
+    const box = (await screen.findByText("These two cannot be compared fairly")).closest("section") as HTMLElement;
+    expect(box).toHaveTextContent("They were tested on different test cases");
+    expect(box).toHaveTextContent("both sets of results used the same test cases and the same AI model");
+    expect(within(box).getByRole("link", { name: "Open the first result" })).toHaveAttribute("href", "#/evals/eval-a");
+    expect(box).not.toHaveTextContent(/82acd02d8a18|golden/);
+  });
+
+  it("keeps the API's wording for a refused pair in the live app", async () => {
+    const refused = new ApiError("They ran different cases (golden-v3 82acd02d8a18 against holdout-v1 8c7eb9ea4eb0), so the difference could come from the test.", 422);
+    page(fakeSource({ compare: vi.fn().mockRejectedValue(refused) }), <ComparePage baselineId="eval-a" candidateId="eval-b" />);
+    const box = (await screen.findByText("These two cannot be compared fairly")).closest("section") as HTMLElement;
+    expect(box).toHaveTextContent("golden-v3 82acd02d8a18");
+    expect(within(box).getByRole("link", { name: "Open the first evaluation" })).toBeInTheDocument();
+  });
+
+  it("says a result was not found in the demo's words", async () => {
+    setPlainWords(true);
+    page(fakeSource({ kind: "demo", compare: vi.fn().mockRejectedValue(new ApiError("evaluation not found: eval-x", 404)) }), <ComparePage baselineId="eval-a" candidateId="eval-x" />);
+    expect(await screen.findByRole("heading", { name: "Result not found" })).toBeInTheDocument();
+  });
+
+  it("and the compare picker speaks of results, not evaluations, in the demo only", async () => {
+    setPlainWords(true);
+    page(fakeSource({ kind: "demo", getEval: vi.fn().mockResolvedValue(evalReport()), listEvals: vi.fn().mockResolvedValue([evalReport(), evalReport({ eval_id: "eval-2" })]) }), <EvalReportPage evalId="eval-bench" />);
+    expect(await screen.findByLabelText("Compare this result (as the “before”) with")).toBeInTheDocument();
+    cleanup();
+    setPlainWords(false);
+    page(fakeSource({ getEval: vi.fn().mockResolvedValue(evalReport()), listEvals: vi.fn().mockResolvedValue([evalReport(), evalReport({ eval_id: "eval-2" })]) }), <EvalReportPage evalId="eval-bench" />);
+    expect(await screen.findByLabelText("Compare this evaluation (as the “before”) with")).toBeInTheDocument();
   });
 });
 

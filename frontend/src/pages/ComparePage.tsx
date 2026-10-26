@@ -4,7 +4,7 @@ import { useDataSource } from "../api/context";
 import type { CaseChange, Comparison, LabEffect } from "../api/types";
 import { ApiDown } from "../components/ApiDown";
 import { PlainLead, Technical } from "../components/Plain";
-import { compareLead, plainModel } from "../content/plain";
+import { compareLead, plainModel, plainRefusal } from "../content/plain";
 import { Icon } from "../components/Icon";
 import { RateBar } from "../components/RateBar";
 import { VariantChip } from "../components/VariantChip";
@@ -434,15 +434,17 @@ export function ComparePage({ baselineId, candidateId }: { baselineId: string; c
       ) : refused ? (
         <section className="card empty" role="alert">
           <h2 className="card-title">These two cannot be compared fairly</h2>
-          <p>{result.error?.message}</p>
+          <p>{plainWords() && result.error ? plainRefusal(result.error.message) : result.error?.message}</p>
           <p className="muted small">
-            A comparison only makes sense when both evaluations ran the same cases on the same model, so the difference can only come from the agent.{" "}
-            <a href={evalHref(baselineId)}>Open the first evaluation</a> to pick another one to compare it with.
+            {plainWords()
+              ? "A comparison only makes sense when both sets of results used the same test cases and the same AI model, so a difference can only come from the agent. "
+              : "A comparison only makes sense when both evaluations ran the same cases on the same model, so the difference can only come from the agent. "}
+            <a href={evalHref(baselineId)}>{plainWords() ? "Open the first result" : "Open the first evaluation"}</a> to pick another one to compare it with.
           </p>
         </section>
       ) : notFound ? (
         <section className="card empty" role="alert">
-          <h2 className="card-title">Evaluation not found</h2>
+          <h2 className="card-title">{plainWords() ? "Result not found" : "Evaluation not found"}</h2>
           <p>{result.error?.message}</p>
         </section>
       ) : !data ? (

@@ -83,7 +83,7 @@ describe("what the demo says about each kind of evaluation", () => {
 
   it("states that four problems on one task is a demonstration", () => {
     setPlainWords(true);
-    expect(kindNote({ ...report, kind: "faultlab" })).toContain("a demonstration, not a benchmark");
+    expect(kindNote({ ...report, kind: "faultlab" })).toContain("a demonstration, not a proper test");
   });
 
   it("describes the checker test as catching the right problems and nothing else", () => {

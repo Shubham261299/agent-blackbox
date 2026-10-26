@@ -30,7 +30,7 @@ export function AboutDemo() {
         <strong>About this demo.</strong> Everything here was recorded from real runs
         {model ? ` of the local model ${model}` : ""}
         {when ? `, ${when}` : ""}. Nothing is live: no agent runs and no model is called while you browse.
-        {manifest && ` It holds ${manifest.counts.runs} runs, ${manifest.counts.evaluations} evaluations and ${manifest.counts.comparisons} before-and-after comparisons.`}{" "}
+        {manifest && ` It holds ${manifest.counts.runs} runs, ${manifest.counts.evaluations} sets of results and ${manifest.counts.comparisons} before-and-after comparisons.`}{" "}
         <a href={REPO_URL} target="_blank" rel="noreferrer">
           Source code and how to run it yourself
         </a>

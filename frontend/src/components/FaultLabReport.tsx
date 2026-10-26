@@ -1,6 +1,6 @@
 import type { EvalReport, FaultLabNote, LabRunSummary } from "../api/types";
 import { runHref } from "../hooks/useHashRoute";
-import { plainSource, plainStepName } from "../content/plain";
+import { plainFault, plainReason, plainSource, plainStepName } from "../content/plain";
 import { effectLabel, effectText, labNote, verdictText } from "../lib/notes";
 import { plainWords } from "../lib/plain";
 import { kindNote, metricLabel } from "../lib/metrics";
@@ -48,7 +48,9 @@ function Compare({ note }: { note: FaultLabNote }) {
   );
 }
 
-function FaultCard({ title, note, runId }: { title: string; note: FaultLabNote; runId: string }) {
+function FaultCard({ title: ownTitle, note, runId }: { title: string; note: FaultLabNote; runId: string }) {
+  const own = { title: ownTitle, description: note.description };
+  const { title, description } = plainWords() ? plainFault(note.fault, own) : own;
   return (
     <article className="card lab-card" aria-label={title}>
       <header className="lab-head">
@@ -60,7 +62,7 @@ function FaultCard({ title, note, runId }: { title: string; note: FaultLabNote; 
           {effectLabel(note.effect)}
         </span>
       </header>
-      <p className="lab-desc">{note.description}</p>
+      <p className="lab-desc">{description}</p>
 
       <div className="lab-grid">
         <section aria-label={`Effect of ${title}`}>
@@ -80,7 +82,7 @@ function FaultCard({ title, note, runId }: { title: string; note: FaultLabNote; 
                   {plainWords() ? <strong>{plainStepName(s.span_name)}</strong> : <span className="mono">{s.span_name}</span>}
                   <span className="muted small"> · {plainWords() ? plainSource(s.source) : s.source}</span>
                   {s.span_id === note.origin_span_id && <span className="planted-badge">planted here</span>}
-                  <span className="suspect-reason">{s.reason}</span>
+                  <span className="suspect-reason">{plainWords() ? plainReason(s.reason) : s.reason}</span>
                 </li>
               ))}
             </ol>

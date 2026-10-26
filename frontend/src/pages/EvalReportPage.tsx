@@ -281,7 +281,9 @@ function ComparePicker({ report }: { report: EvalReport }) {
   if (options.length === 0) {
     return (
       <p className="muted small compare-none">
-        Nothing to compare this with yet: a comparison needs another finished evaluation of the same kind, on the same model and dataset content.
+        {plainWords()
+          ? "Nothing to compare this with yet: a comparison needs another finished result of the same kind, on the same AI model and the same test cases."
+          : "Nothing to compare this with yet: a comparison needs another finished evaluation of the same kind, on the same model and dataset content."}
       </p>
     );
   }
@@ -293,7 +295,7 @@ function ComparePicker({ report }: { report: EvalReport }) {
         window.location.hash = compareHref(report.eval_id, pick);
       }}
     >
-      <label htmlFor="compare-with">Compare this evaluation (as the “before”) with</label>
+      <label htmlFor="compare-with">{plainWords() ? "Compare this result (as the “before”) with" : "Compare this evaluation (as the “before”) with"}</label>
       <select id="compare-with" value={pick} onChange={(e) => setChosen(e.target.value)}>
         {options.map((o) => (
           <option key={o.eval_id} value={o.eval_id}>
@@ -406,7 +408,9 @@ export function EvalReportPage({ evalId }: { evalId: string }) {
           )}
           {plainWords() && (
             <p className="foot muted small">
-              Identifiers: {data.eval_id} · test set {data.dataset_version} ({data.dataset_hash}){data.seed != null ? ` · seed ${data.seed}` : ""}
+              <span className="mono">
+                Identifiers: {data.eval_id} · test set {data.dataset_version} ({data.dataset_hash}){data.seed != null ? ` · seed ${data.seed}` : ""}
+              </span>
             </p>
           )}
         </>

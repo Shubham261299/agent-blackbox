@@ -139,7 +139,7 @@ function plainKindNote(report: Pick<EvalReport, "kind" | "model" | "n_cases">): 
     case "reference":
       return "A scripted run where every answer is correct. It shows the whole pipeline works. It says nothing about any AI model.";
     case "faultlab":
-      return "I planted each problem on purpose in the same refund task, next to a run with nothing planted. Then the analysis tried to say which step to look at, without being told what I planted. Four problems on one task is a demonstration, not a benchmark.";
+      return "I planted each problem on purpose in the same refund task, next to a run with nothing planted. Then the analysis tried to say which step to look at, without being told what I planted. Four problems on one task is a demonstration, not a proper test.";
     case "validation":
       return "I planted known problems in scripted runs. A row passes when the checks reacted exactly as expected: they caught the problem and flagged nothing else.";
   }

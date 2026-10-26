@@ -3,7 +3,7 @@ import type { RunRecord } from "../api/types";
 import { setPlainWords } from "../lib/plain";
 import { afterEach, beforeEach } from "vitest";
 import { check, comparison, evalReport, happyPathSpans, run, runEvaluation, span, suspect, withFailures } from "../test/factories";
-import { EVALS_LEAD, RUNS_LEAD, compareLead, evalLead, plainDataset, plainModel, plainSource, plainStepName, runOrder, runStory, stepText } from "./plain";
+import { EVALS_LEAD, RUNS_LEAD, compareLead, evalLead, plainDataset, plainFault, plainModel, plainReason, plainRefusal, plainSource, plainStepName, runOrder, runStory, stepText } from "./plain";
 
 beforeEach(() => setPlainWords(true));
 afterEach(() => setPlainWords(false));
@@ -190,5 +190,72 @@ describe("the analysis's suggestions in everyday words", () => {
     expect(plainSource("task completion")).toBe("the job was not finished");
     expect(plainSource("retried")).toBe("it needed retries");
     expect(plainSource("something new")).toBe("something new");
+  });
+});
+
+describe("plainReason: what an error or a suggestion says", () => {
+  it("says a tool sent back something unusable, naming the tool", () => {
+    expect(plainReason("lookup_order returned data that breaks its contract: expected an object, got str: '<html>'")).toBe("The order lookup sent back something the agent could not use.");
+    expect(plainReason("issue_refund returned data that breaks its contract: x")).toBe("The refund tool sent back something the agent could not use.");
+    expect(plainReason("mystery_tool returned data that breaks its contract: x")).toBe("The “mystery tool” tool sent back something the agent could not use.");
+  });
+
+  it("says how long a tool took before it gave up", () => {
+    expect(plainReason("ToolTimeoutError: check_refund_policy timed out after 0.3s")).toBe("The refund policy check did not answer within 0.3 seconds.");
+    expect(plainReason("ToolTimeoutError: lookup_order timed out after 12s")).toBe("The order lookup did not answer within 12 seconds.");
+  });
+
+  it("says the AI model could not be reached, without the machinery", () => {
+    expect(plainReason("ModelUnavailableError: model backend unavailable: connection refused")).toBe("The AI model could not be reached.");
+  });
+
+  it("says a rule was broken: acting on an order that was never looked up", () => {
+    expect(plainReason("update_shipping_address on order 45 without a successful lookup first")).toBe("Changed the shipping address on order 45 without looking the order up first.");
+    expect(plainReason("issue_refund on order 42 without a successful lookup first")).toBe("Issued a refund on order 42 without looking the order up first.");
+    expect(plainReason("weird_tool on order 7 without a successful lookup first")).toBe("Used the “weird tool” tool on order 7 without looking the order up first.");
+  });
+
+  it("shows a message it does not know exactly as it is, and never guesses", () => {
+    expect(plainReason("refund not approved")).toBe("refund not approved");
+    expect(plainReason("")).toBe("");
+    expect(plainReason("TypeError: something unexpected")).toBe("TypeError: something unexpected");
+  });
+});
+
+describe("plainRefusal: why two results cannot be compared", () => {
+  it("rewords each refusal the API gives", () => {
+    expect(plainRefusal("An evaluation cannot be compared with itself.")).toBe("A result cannot be compared with itself.");
+    expect(plainRefusal("They ran different cases (golden-v3 82acd02d8a18 against holdout-v1 8c7eb9ea4eb0), so the difference could come from the test.")).toBe(
+      "They were tested on different test cases, so any difference could come from the test and not from the agent.");
+    expect(plainRefusal("They used different models (ollama:a and ollama:b).")).toContain("different AI models");
+    expect(plainRefusal("They used different seeds (0 and 1).")).toContain("different settings");
+    expect(plainRefusal("These are different kinds of evaluation (benchmark and faultlab).")).toBe("These are two different kinds of result, so there is nothing fair to compare.");
+    expect(plainRefusal("eval-a5479ac6 is a validation evaluation: it checks the checks, not an agent, so there is nothing to compare.")).toBe(
+      "That one tests the checker itself, not an agent, so there is nothing to compare.");
+    expect(plainRefusal("eval-x has not finished.")).toBe("One of them has not finished yet.");
+  });
+
+  it("leaves out the hashes and ids the API's wording includes", () => {
+    expect(plainRefusal("They ran different cases (golden-v3 82acd02d8a18 against holdout-v1 8c7eb9ea4eb0), so the difference could come from the test.")).not.toMatch(/\d{4}|golden/);
+  });
+
+  it("shows a refusal it does not know as it is", () => {
+    expect(plainRefusal("Something new went wrong.")).toBe("Something new went wrong.");
+  });
+});
+
+describe("plainFault: the four planted problems", () => {
+  const own = { title: "Own title", description: "Own description" };
+
+  it("names and describes each one in everyday words", () => {
+    expect(plainFault("tool_timeout", own).title).toBe("A tool times out");
+    expect(plainFault("malformed_output", own).title).toBe("A tool sends back garbage");
+    expect(plainFault("wrong_tool", own).title).toBe("The wrong tool is chosen");
+    expect(plainFault("model_error", own).title).toBe("The AI model stops answering");
+    for (const f of ["tool_timeout", "malformed_output", "wrong_tool", "model_error"]) expect(plainFault(f, own).description.length).toBeGreaterThan(50);
+  });
+
+  it("keeps an unknown problem's own title and description", () => {
+    expect(plainFault("something_new", own)).toEqual(own);
   });
 });

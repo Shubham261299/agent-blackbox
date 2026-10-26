@@ -7,6 +7,7 @@ import { CopyButton } from "../components/CopyButton";
 import { VariantChip } from "../components/VariantChip";
 import { EvaluationCard } from "../components/EvaluationCard";
 import { PlainRun } from "../components/PlainRun";
+import { plainReason } from "../content/plain";
 import { Technical } from "../components/Plain";
 import { Icon } from "../components/Icon";
 import { RedactedText } from "../components/RedactedText";
@@ -65,7 +66,7 @@ function Outcome({ run }: { run: RunRecord }) {
         <div>
           <strong>Run failed</strong>
           <p>
-            <RedactedText text={run.error ?? "No error message was recorded."} />
+            <RedactedText text={run.error ? (plainWords() ? plainReason(run.error) : run.error) : "No error message was recorded."} />
           </p>
         </div>
       </section>

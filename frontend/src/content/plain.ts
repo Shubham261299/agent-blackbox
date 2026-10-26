@@ -147,6 +147,76 @@ export function plainStepName(spanName: string): string {
   return spanName;
 }
 
+/** The tool as a noun phrase, for a sentence about what it did. */
+const TOOL_NOUN: Record<string, string> = {
+  lookup_order: "The order lookup",
+  check_refund_policy: "The refund policy check",
+  issue_refund: "The refund tool",
+  update_shipping_address: "The address change tool",
+};
+
+const toolNoun = (tool: string) => TOOL_NOUN[tool] ?? `The \u201c${tool.replaceAll("_", " ")}\u201d tool`;
+
+/**
+ * What an error message or a reason from the analysis says, in everyday words. The messages are recorded as the code
+ * raised them ("ToolTimeoutError: check_refund_policy timed out after 0.3s"); a message in a shape not known here is
+ * shown as it is, never guessed at.
+ */
+export function plainReason(reason: string): string {
+  const contract = /^(\w+) returned data that breaks its contract/.exec(reason);
+  if (contract) return `${toolNoun(contract[1] as string)} sent back something the agent could not use.`;
+  const timeout = /^ToolTimeoutError: (\w+) timed out after ([\d.]+)s/.exec(reason);
+  if (timeout) return `${toolNoun(timeout[1] as string)} did not answer within ${timeout[2]} seconds.`;
+  if (/^ModelUnavailableError:/.test(reason)) return "The AI model could not be reached.";
+  const noLookup = /^(\w+) on order (\d+) without a successful lookup first/.exec(reason);
+  if (noLookup) {
+    const make = TOOL_TEXT[noLookup[1] as string];
+    const did = make ? make(noLookup[2]) : `Used the \u201c${(noLookup[1] as string).replaceAll("_", " ")}\u201d tool on order ${noLookup[2]}`;
+    return `${did} without looking the order up first.`;
+  }
+  return reason;
+}
+
+/**
+ * Why two results cannot be compared, as the API words it, in everyday words. A refusal in a shape not known here is
+ * shown as it is.
+ */
+export function plainRefusal(reason: string): string {
+  if (reason === "An evaluation cannot be compared with itself.") return "A result cannot be compared with itself.";
+  if (/^They ran different cases/.test(reason)) return "They were tested on different test cases, so any difference could come from the test and not from the agent.";
+  if (/^They used different models/.test(reason)) return "They used different AI models, so any difference could come from the model and not from the agent.";
+  if (/^They used different seeds/.test(reason)) return "They were run with different settings, so they are not a fair pair.";
+  const kinds = /^These are different kinds of evaluation \((\w+) and (\w+)\)\./.exec(reason);
+  if (kinds) return "These are two different kinds of result, so there is nothing fair to compare.";
+  if (/ is a validation evaluation:/.test(reason)) return "That one tests the checker itself, not an agent, so there is nothing to compare.";
+  if (/ has not finished\.$/.test(reason)) return "One of them has not finished yet.";
+  return reason;
+}
+
+/** The four planted problems of the failure lab, named and described in everyday words. Unknown ones keep their own text. */
+const PLAIN_FAULT: Record<string, { title: string; description: string }> = {
+  tool_timeout: {
+    title: "A tool times out",
+    description: "The refund policy check does not answer in time. The original agent has no way to cope with that, so the run ends.",
+  },
+  malformed_output: {
+    title: "A tool sends back garbage",
+    description: "The order lookup sends back an error web page instead of an order. The call still looks like a success, so nothing reports an error.",
+  },
+  wrong_tool: {
+    title: "The wrong tool is chosen",
+    description: "The AI model's first move is swapped for an address change on an order that was never looked up.",
+  },
+  model_error: {
+    title: "The AI model stops answering",
+    description: "The AI model stops answering after the order lookup, as if it could not be reached.",
+  },
+};
+
+export function plainFault(fault: string, own: { title: string; description: string }): { title: string; description: string } {
+  return PLAIN_FAULT[fault] ?? own;
+}
+
 const SOURCE_TEXT: Record<string, string> = {
   "error status": "it reported an error",
   "tool output contract": "its answer could not be used",

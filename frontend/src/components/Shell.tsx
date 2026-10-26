@@ -51,7 +51,7 @@ export function Shell({ children, demo, route }: { children: ReactNode; demo: bo
             </a>
           </nav>
           <div className="topbar-right">
-            <span className="local-note" title="Runs, traces and evaluations stay on this machine.">
+            <span className="local-note" title={demo ? "Everything here is a recording. Nothing is live." : "Runs, traces and evaluations stay on this machine."}>
               <Icon name="lock" size={13} />
               {demo ? "Recorded demo data" : "Local only"}
             </span>
