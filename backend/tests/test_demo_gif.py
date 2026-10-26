@@ -41,8 +41,8 @@ def test_the_numbers_in_the_captions_are_the_ones_in_the_data():
     manifest = json.loads((DATA / "manifest.json").read_text(encoding="utf-8"))
     captions = [s.caption for s in gif.frames()]
     assert f"holds {manifest['counts']['runs']} real runs" in captions[0]
-    assert "3 of 4 planted faults no longer matter, and 0 got worse" in captions[3]
-    assert "On 24 cases it fixed 2 and broke 5" in captions[4]
+    assert "3 of 4 planted problems no longer matter, and 0 got worse" in captions[3]
+    assert "On 24 cases they fixed 2 and broke 5" in captions[4]
 
 
 @needs_data
@@ -51,8 +51,8 @@ def test_the_routes_are_the_tour_and_the_unfair_pair_is_really_refused():
     tour = manifest["tour"]
     specs = gif.frames()
     assert specs[1].route == specs[2].route == f"runs/{tour['failed_run']}"
-    # the trace is below the first screen, so its frame scrolls down and the window is tall enough to hold it
-    assert specs[1].top == 0 and specs[2].top >= 500 and specs[2].window_height >= specs[2].top + gif.VIEW[1]
+    # the step list is below the first screen, so its frame scrolls down and the window is tall enough to hold it
+    assert specs[1].top == 0 and specs[2].top >= 300 and specs[2].window_height >= specs[2].top + gif.VIEW[1]
     assert specs[3].route == "compare/{}/{}".format(*tour["fixed"])
     assert specs[4].route == "compare/{}/{}".format(*tour["regressed"])
     _, before, after = specs[5].route.split("/")
@@ -75,8 +75,8 @@ def test_changing_the_data_changes_the_captions(tmp_path):
         path.write_text(json.dumps(comparison), encoding="utf-8")
     captions = [s.caption for s in gif.frames(tmp_path / "data")]
     assert "holds 4242 real runs" in captions[0]
-    assert "1 of 4 planted faults no longer matter" in captions[3]
-    assert "it fixed 2 and broke 9" in captions[4]
+    assert "1 of 4 planted problems no longer matter" in captions[3]
+    assert "they fixed 2 and broke 9" in captions[4]
 
 
 # ---- composing a frame ----------------------------------------------------------------------------------
@@ -202,7 +202,7 @@ def test_build_serves_the_site_captures_every_frame_and_cleans_up(tmp_path, monk
     before = set(Path(gif.tempfile.gettempdir()).glob("blackbox-gif-*"))
     out = gif.build(site, tmp_path / "out" / "demo.gif", DATA, browser="fake")
     assert len(urls) == 6 and urls[0][0].endswith("/index.html#/") and "#/runs/" in urls[1][0] and "#/compare/" in urls[5][0]
-    assert urls[2][1:] == (1280, 1330)
+    assert urls[2][1:] == (1280, 1200)
     with Image.open(out) as g:
         assert g.n_frames == 6
     assert set(Path(gif.tempfile.gettempdir()).glob("blackbox-gif-*")) == before

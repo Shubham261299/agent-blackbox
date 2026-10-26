@@ -12,7 +12,7 @@
 
 A flight recorder for AI agents. It records every step an agent takes, checks the recording, shows where a run went wrong, and measures whether a fix made the agent better or worse. It runs on a laptop with a small local model and costs nothing.
 
-**[Open the recorded demo](https://shubham261299.github.io/agent-blackbox/)** (no install; it replays real recorded runs, nothing in it is live).
+**[Open the recorded demo](https://shubham261299.github.io/agent-blackbox/)** (no install; it replays real recorded runs, nothing in it is live). It opens on a front page in plain language, with a three-minute guided tour. Everything technical is one click away, folded behind "Show technical details".
 
 ![A captioned tour of the demo: a failed run, a fix that worked, a fix that did not](docs/images/demo.gif)
 
@@ -26,13 +26,13 @@ To test it I built a small customer-support agent (refunds, order lookups, addre
 
 ## The 60-second story
 
-**1. A run fails, and the page says where.** A tool did not answer in time, so the agent stopped before it could finish the refund. The failed step is red in the trace, and "Where to look first" names it. [Open this run in the demo](https://shubham261299.github.io/agent-blackbox/#/runs/run-e92cfa5d).
+**1. A run fails, and the page says where.** A tool did not answer in time, so the agent stopped before it could finish the refund. The page lists what the agent did step by step, marks the step that failed, and says where to look first. [Open this run in the demo](https://shubham261299.github.io/agent-blackbox/#/runs/run-e92cfa5d).
 
-![A failed run: the evaluation card names the tool that timed out, and the trace shows it in red](docs/images/failed-run.png)
+![A failed run in plain words: the steps the agent took, the one that failed marked, and where to look first](docs/images/failed-run.png)
 
-**2. A fix that worked.** I taught the agent to retry a failed step. Of the four faults I planted on purpose (a timeout, a model failure, garbage tool output, a wrong tool), three now have no effect on the run and none got worse. It cost three extra retries. The fourth, a wrong tool choice, is not something retrying can fix. [Open the comparison](https://shubham261299.github.io/agent-blackbox/#/compare/eval-7f1699f1/eval-0f9152b9).
+**2. A fix that worked.** I taught the agent to retry a failed step. Of the four problems I planted on purpose (a timeout, a model failure, garbage tool output, a wrong tool), three now have no effect on the run and none got worse. It cost three extra retries. The fourth, a wrong tool choice, is not something retrying can fix. [Open the comparison](https://shubham261299.github.io/agent-blackbox/#/compare/eval-7f1699f1/eval-0f9152b9).
 
-![Before and after for the retrying agent: 3 faults fixed, none broken](docs/images/fix-that-worked.png)
+![Before and after for the agent that retries: 3 planted problems fixed, none broken](docs/images/fix-that-worked.png)
 
 **3. A fix that did not work.** I rewrote the agent's instructions to tell it to look every order up first and to ask when something is missing. It looked like an improvement. Across the 24 cases it fixed 2 and broke 5, and the page lists which ones. I wrote a second version of the instructions and it was still worse. [Open the comparison](https://shubham261299.github.io/agent-blackbox/#/compare/eval-09d327ad/eval-71224f4b).
 
@@ -40,7 +40,7 @@ To test it I built a small customer-support agent (refunds, order lookups, addre
 
 ## Results
 
-Every number below comes from a stored evaluation, and the evaluation id is next to it. The recorded demo contains all of them. Model: `qwen2.5:7b` on one laptop CPU, temperature 0, seed 0.
+Every number below comes from a stored evaluation (a set of results), and its id is next to it. The recorded demo contains all of them. Model: `qwen2.5:7b` on one laptop CPU, temperature 0, seed 0.
 
 | What was tested | Evaluation | Result |
 |---|---|---|

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { comparison } from "../test/factories";
-import { PLAIN_VARIANT_INFO, VARIANT_INFO, costRows, variantInfo, variantLabel } from "./compare";
+import { PLAIN_VARIANT_INFO, VARIANT_INFO, costRows, variantInfo, variantLabel, verdict } from "./compare";
 import { JUDGED_METRICS, KIND_LABEL, METRICS, PLAIN_KIND_LABEL, PLAIN_METRICS, kindLabel, kindNote, metricLabel, metricWhat } from "./metrics";
 import { plainWords, setPlainWords } from "./plain";
 
@@ -114,5 +114,22 @@ describe("start-up", () => {
     const main = readFileSync(join(process.cwd(), "src", "main.tsx"), "utf-8");
     expect(main).toContain('setPlainWords(import.meta.env.MODE === "demo");');
     expect(main.indexOf("setPlainWords")).toBeLessThan(main.indexOf("createRoot("));
+  });
+});
+
+describe("the headline of a before and after", () => {
+  const lab = () => comparison({ kind: "faultlab", fixed: 3, broken: 0, matched: 4 });
+
+  it("counts planted problems in the demo and faults in the live app", () => {
+    expect(verdict(lab()).headline).toBe("3 faults fixed, none broken");
+    setPlainWords(true);
+    expect(verdict(lab()).headline).toBe("3 planted problems fixed, none broken");
+    expect(verdict(comparison({ kind: "faultlab", fixed: 1, broken: 1 })).headline).toBe("1 planted problem fixed, 1 planted problem broken");
+  });
+
+  it("counts cases the same way in both modes", () => {
+    expect(verdict(comparison({ fixed: 2, broken: 5 })).headline).toBe("2 cases fixed, 5 cases broken");
+    setPlainWords(true);
+    expect(verdict(comparison({ fixed: 2, broken: 5 })).headline).toBe("2 cases fixed, 5 cases broken");
   });
 });

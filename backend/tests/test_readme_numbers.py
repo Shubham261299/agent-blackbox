@@ -66,7 +66,7 @@ def test_the_before_and_after_counts_in_the_readme_are_the_comparisons():
     assert (lab["fixed"], lab["broken"], lab["matched"]) == (3, 0, 4)
     assert (lab["baseline_cost"]["retries"], lab["candidate_cost"]["retries"]) == (0, 3)
     assert (lab["baseline_cost"]["tool_calls"], lab["candidate_cost"]["tool_calls"]) == (11, 13)
-    for sentence in ("3 faults fixed, 0 broken, 3 extra retries (11 to 13 tool calls)", "Of the four faults", "three now have no effect on the run and none got worse"):
+    for sentence in ("3 faults fixed, 0 broken, 3 extra retries (11 to 13 tool calls)", "Of the four problems", "three now have no effect on the run and none got worse"):
         assert sentence in text, sentence
     assert "fixed 2 and broke 5" in text
 

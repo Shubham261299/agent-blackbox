@@ -87,7 +87,8 @@ const cases = (n: number) => `${n} ${n === 1 ? "case" : "cases"}`;
  * while a working case breaks is mixed, and the page says so.
  */
 export function verdict(c: Comparison): Verdict {
-  const noun = (n: number) => (c.kind === "faultlab" ? `${n} ${n === 1 ? "fault" : "faults"}` : cases(n));
+  const lab = plainWords() ? ["planted problem", "planted problems"] : ["fault", "faults"];
+  const noun = (n: number) => (c.kind === "faultlab" ? `${n} ${n === 1 ? lab[0] : lab[1]}` : cases(n));
   const net = c.fixed - c.broken;
   const netText = net === 0 ? "net zero" : `net ${net > 0 ? "+" : "−"}${Math.abs(net)}`;
   if (c.fixed === 0 && c.broken === 0) {

@@ -75,12 +75,12 @@ def frames(data_dir: Path = DEMO_DATA) -> list[Frame]:
     before, after = unfair.split("|")
     return [
         Frame("", f"Every step an AI agent takes is recorded. This demo holds {manifest['counts']['runs']} real runs."),
-        Frame(f"runs/{tour['failed_run']}", "A tool timed out and the run failed. The page says which step to look at first."),
-        Frame(f"runs/{tour['failed_run']}", "The failed step is red in the trace, next to the error that caused it.", 1330, 610),
+        Frame(f"runs/{tour['failed_run']}", "A tool timed out and the run failed. The page says so in plain words."),
+        Frame(f"runs/{tour['failed_run']}", "It lists every step, marks the one that failed, and says where to look first.", 1200, 400),
         Frame(f"compare/{tour['fixed'][0]}/{tour['fixed'][1]}",
-              f"Retrying failed steps: {lab['fixed']} of {lab['matched']} planted faults no longer matter, and {lab['broken']} got worse."),
+              f"Retrying failed steps: {lab['fixed']} of {lab['matched']} planted problems no longer matter, and {lab['broken']} got worse."),
         Frame(f"compare/{tour['regressed'][0]}/{tour['regressed'][1]}",
-              f"A rewritten prompt looked like an improvement. On {bench['matched']} cases it fixed {bench['fixed']} and broke {bench['broken']}."),
+              f"Rewritten instructions looked like an improvement. On {bench['matched']} cases they fixed {bench['fixed']} and broke {bench['broken']}."),
         Frame(f"compare/{before}/{after}", "The page refuses to compare runs that tested different things, and says why."),
     ]
 
