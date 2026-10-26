@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
@@ -35,7 +35,7 @@ describe("HomePage", () => {
     const ways = await screen.findByRole("group", { name: "Choose how much to read" });
     await user.click(within(ways).getByRole("button", { name: /30 seconds/ }));
     expect(window.HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
-    expect(within(ways).getByRole("link", { name: /3 minutes/ })).toHaveAttribute("href", "#/runs/run-e92cfa5d");
+    expect(within(ways).getByRole("link", { name: /3 minutes/ })).toHaveAttribute("href", "#/runs/run-e92cfa5d?tour=1"); // enters the tour at its first stop
     expect(within(ways).getByRole("link", { name: /I.m an engineer/ })).toHaveAttribute("href", "#/evals");
   });
 
@@ -98,6 +98,8 @@ describe("HomePage", () => {
     renderHome();
     const inside = (await screen.findByRole("heading", { name: "Look inside" })).closest("section") as HTMLElement;
     expect(within(inside).getAllByRole("listitem")).toHaveLength(4);
+    // each stop can be entered directly, and knows its place in the tour
+    expect(within(inside).getAllByRole("link").slice(0, 4).map((l) => l.getAttribute("href")?.split("?tour=")[1])).toEqual(["1", "2", "3", "4"]);
     expect(within(inside).getByRole("link", { name: "All runs" })).toHaveAttribute("href", "#/runs");
     expect(within(inside).getByRole("link", { name: "All results" })).toHaveAttribute("href", "#/evals");
     expect(within(inside).getByRole("link", { name: "Source code" })).toHaveAttribute("href", expect.stringContaining("github.com/Shubham261299/agent-blackbox"));
@@ -143,5 +145,29 @@ describe("the front page in the app", () => {
     expect(within(nav).queryByRole("link", { name: "Overview" })).not.toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "Runs" })).toHaveAttribute("href", "#/");
     expect(MANIFEST.counts.runs).toBeGreaterThan(0);
+  });
+
+  it("shows the tour banner above a stop's page, and drops it when the visitor leaves the tour", async () => {
+    window.location.hash = "#/runs/run-e92cfa5d?tour=1";
+    render(<App source={demoSource()} />);
+    const banner = await screen.findByRole("complementary", { name: "Guided tour" });
+    expect(banner).toHaveTextContent("Stop 1 of 4");
+    expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument(); // the stop's own page is under it
+    await act(async () => {
+      window.location.hash = "#/runs/run-e92cfa5d";
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(screen.queryByRole("complementary", { name: "Guided tour" })).not.toBeInTheDocument();
+  });
+
+  it("goes from one stop to the next with the banner's button", async () => {
+    window.location.hash = "#/runs/run-e92cfa5d?tour=1";
+    render(<App source={demoSource()} />);
+    const next = within(await screen.findByRole("complementary")).getByRole("link", { name: "Next stop" });
+    await act(async () => {
+      window.location.hash = new URL(next.getAttribute("href") as string, "http://x/").hash;
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(await screen.findByText(/Stop 2 of 4: The failure lab/)).toBeInTheDocument();
   });
 });

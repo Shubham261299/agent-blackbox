@@ -1,6 +1,7 @@
 import { DataSourceContext } from "./api/context";
 import type { DataSource } from "./api/client";
 import { Shell } from "./components/Shell";
+import { TourBanner } from "./components/TourBanner";
 import { useHashRoute } from "./hooks/useHashRoute";
 import { ComparePage } from "./pages/ComparePage";
 import { EvalReportPage } from "./pages/EvalReportPage";
@@ -14,6 +15,7 @@ export default function App({ source }: { source: DataSource }) {
   return (
     <DataSourceContext.Provider value={source}>
       <Shell demo={source.kind === "demo"} route={route}>
+        {source.kind === "demo" && <TourBanner hash={window.location.hash} />}
         {route.name === "run" ? (
           <RunDetailPage key={route.runId} runId={route.runId} />
         ) : route.name === "evals" ? (

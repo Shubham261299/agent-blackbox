@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { comparison } from "../test/factories";
-import { tourStops } from "./tour";
+import { parseTour, tourLink, tourStops, withoutTour } from "./tour";
 
 const TOUR = {
   failed_run: "run-e92cfa5d",
@@ -55,5 +55,37 @@ describe("tourStops", () => {
 
   it("encodes ids in links", () => {
     expect(tourStops({ failed_run: "run a/b" })[0]?.href).toBe("#/runs/run%20a%2Fb");
+  });
+});
+
+describe("tour addresses", () => {
+  const stops = tourStops(TOUR, lab, bench);
+
+  it("marks an address with the stop number and reads it back", () => {
+    expect(tourLink(stops[2] as (typeof stops)[number], 2)).toBe("#/compare/eval-lab-base/eval-lab-res?tour=3");
+    expect(parseTour("#/compare/eval-lab-base/eval-lab-res?tour=3")).toBe(3);
+    expect(parseTour("#/runs/run-1?x=1&tour=12")).toBe(12);
+  });
+
+  it("says nothing about the tour for an address that is not part of it", () => {
+    expect(parseTour("#/runs/run-1")).toBeNull();
+    expect(parseTour("#/runs/run-1?tour=")).toBeNull();
+    expect(parseTour("#/runs/run-1?detour=2")).toBeNull();
+    expect(parseTour("")).toBeNull();
+  });
+
+  it("takes the marker back off", () => {
+    expect(withoutTour("#/runs/run-1?tour=2")).toBe("#/runs/run-1");
+    expect(withoutTour("#/runs/run-1")).toBe("#/runs/run-1");
+    expect(withoutTour("#/a?x=1&tour=2")).toBe("#/a?x=1");
+  });
+
+  it("gives every stop something to look at, in words a newcomer can follow", () => {
+    for (const stop of stops) expect(stop.notice.length).toBeGreaterThan(40);
+    expect(stops.map((s) => s.notice).join(" ")).toContain("Where to look first");
+  });
+
+  it("round-trips: every stop's address parses back to its own number", () => {
+    stops.forEach((stop, i) => expect(parseTour(tourLink(stop, i))).toBe(i + 1));
   });
 });

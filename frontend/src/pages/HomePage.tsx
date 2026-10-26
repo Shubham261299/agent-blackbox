@@ -1,9 +1,9 @@
 import { useRef } from "react";
 import { useDataSource } from "../api/context";
-import type { Comparison } from "../api/types";
-import { REPO_URL, buildStory } from "../content/story";
+import { loadDemoStory } from "../content/loadStory";
+import { REPO_URL } from "../content/story";
 import { useQuery } from "../hooks/useQuery";
-import { tourStops } from "../lib/tour";
+import { tourLink } from "../lib/tour";
 import { RUNS_HREF } from "../hooks/useHashRoute";
 
 const GIF = `${import.meta.env.BASE_URL}tour.gif`;
@@ -12,17 +12,7 @@ const GIF = `${import.meta.env.BASE_URL}tour.gif`;
 export function HomePage() {
   const source = useDataSource();
   const found = useRef<HTMLElement>(null);
-  const data = useQuery(async () => {
-    if (!source.demoInfo) return null;
-    const manifest = await source.demoInfo();
-    const evals = await source.listEvals();
-    // A comparison that cannot be loaded only costs its card the numbers.
-    const pair = (ids?: [string, string]): Promise<Comparison | undefined> =>
-      ids ? source.compare(ids[0], ids[1]).catch(() => undefined) : Promise.resolve(undefined);
-    const [lab, bench, second] = await Promise.all([pair(manifest.tour.fixed), pair(manifest.tour.regressed), pair(manifest.tour.second_attempt)]);
-    const story = buildStory({ manifest, evals, lab, bench, second });
-    return { story, stops: tourStops(manifest.tour, lab, bench) };
-  }, [source]);
+  const data = useQuery(() => loadDemoStory(source), [source]);
 
   if (!data.data) {
     return (
@@ -44,7 +34,7 @@ export function HomePage() {
             30 seconds
             <span>the three results</span>
           </button>
-          <a className="btn big" href={firstStop?.href ?? RUNS_HREF}>
+          <a className="btn big" href={firstStop ? tourLink(firstStop, 0) : RUNS_HREF}>
             3 minutes
             <span>a guided tour</span>
           </a>
@@ -138,9 +128,9 @@ export function HomePage() {
       <section className="home-section" aria-labelledby="inside-title">
         <h2 id="inside-title">{story.insideTitle}</h2>
         <ol className="inside">
-          {stops.map((stop) => (
+          {stops.map((stop, i) => (
             <li key={stop.href}>
-              <a href={stop.href}>{stop.title}</a>
+              <a href={tourLink(stop, i)}>{stop.title}</a>
               <span>{stop.text}</span>
             </li>
           ))}
