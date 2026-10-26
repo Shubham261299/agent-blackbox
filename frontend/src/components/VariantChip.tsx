@@ -1,4 +1,5 @@
-import { VARIANT_INFO, variantLabel } from "../lib/compare";
+import { variantInfo, variantLabel } from "../lib/compare";
+import { plainWords } from "../lib/plain";
 import { Icon } from "./Icon";
 
 /**
@@ -7,7 +8,7 @@ import { Icon } from "./Icon";
  * another one's stored runs against a newer dataset version (no model was run for it).
  */
 export function VariantChip({ variant, rescoredFrom }: { variant: string; rescoredFrom?: string | null }) {
-  const what = VARIANT_INFO[variant]?.what;
+  const what = variantInfo(variant)?.what;
   return (
     <span className="variant-chips">
       <span className="variant" data-variant={variant === "baseline" ? "baseline" : "changed"} title={what}>
@@ -15,8 +16,13 @@ export function VariantChip({ variant, rescoredFrom }: { variant: string; rescor
         {variantLabel(variant)}
       </span>
       {rescoredFrom && (
-        <span className="variant" data-variant="rescored" title={`Re-judged from the stored runs of ${rescoredFrom} against a newer dataset version. No model was run.`}>
-          Rescored
+        <span className="variant" data-variant="rescored" title={
+            plainWords()
+              ? `These stored runs (from ${rescoredFrom}) were judged again against corrected rules. No AI model was run for this.`
+              : `Re-judged from the stored runs of ${rescoredFrom} against a newer dataset version. No model was run.`
+          }
+        >
+          {plainWords() ? "Re-judged" : "Rescored"}
         </span>
       )}
     </span>

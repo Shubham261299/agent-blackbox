@@ -11,6 +11,7 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "isolatedModules": true,
+    "allowImportingTsExtensions": true, // vite.config.ts imports a source file by its real name
     "skipLibCheck": true,
     "noEmit": true,
     "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"]

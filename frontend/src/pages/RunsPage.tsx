@@ -1,9 +1,12 @@
 import { ApiUnreachableError } from "../api/client";
 import { useDataSource } from "../api/context";
 import { ApiDown } from "../components/ApiDown";
+import { PlainLead } from "../components/Plain";
 import { RunTable, StatStrip } from "../components/RunTable";
 import { StartRunPanel } from "../components/StartRunPanel";
+import { RUNS_LEAD, runOrder } from "../content/plain";
 import { useQuery } from "../hooks/useQuery";
+import { plainWords } from "../lib/plain";
 
 export function RunsPage() {
   const source = useDataSource();
@@ -18,9 +21,10 @@ export function RunsPage() {
       <div className="page-head">
         <div>
           <h1>Runs</h1>
-          <p className="lede">Every agent execution, recorded. Open a run to see its trace, timing and errors.</p>
+          {!plainWords() && <p className="lede">Every agent execution, recorded. Open a run to see its trace, timing and errors.</p>}
         </div>
       </div>
+      <PlainLead>{RUNS_LEAD}</PlainLead>
 
       {unreachable ? (
         <ApiDown onRetry={runs.refetch} />
@@ -44,7 +48,7 @@ export function RunsPage() {
             runs.data && (
               <>
                 <StatStrip runs={runs.data} />
-                <RunTable runs={runs.data} />
+                <RunTable runs={plainWords() ? runOrder(runs.data) : runs.data} />
               </>
             )
           )}

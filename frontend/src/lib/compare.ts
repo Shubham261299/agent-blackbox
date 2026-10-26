@@ -1,4 +1,5 @@
 import type { CaseChangeKind, Comparison, CostTotals, EvalRunSummary } from "../api/types";
+import { plainWords } from "./plain";
 import { formatDuration } from "./timeScale";
 
 const COMPARABLE_KINDS = ["benchmark", "reference", "faultlab"];
@@ -13,8 +14,23 @@ export const VARIANT_INFO: Record<string, { label: string; what: string }> = {
   "full-v3": { label: "Full (v3)", what: "Resilient and Guided (v3) together." },
 };
 
+/** The same agents in everyday words, for the recorded demo. */
+export const PLAIN_VARIANT_INFO: Record<string, { label: string; what: string }> = {
+  baseline: { label: "Original agent", what: "The agent as first built: no retries, and the original instructions." },
+  resilient: { label: "Agent that retries", what: "If a tool times out or the AI model fails, it tries again up to twice. It also rejects an unusable tool answer and tries again." },
+  guided: { label: "New instructions (v2)", what: "The agent was given a rewritten set of instructions: look the order up first, and ask instead of guessing." },
+  full: { label: "Retries + new instructions (v2)", what: "Both changes together: it retries, and it has the rewritten instructions (v2)." },
+  "guided-v3": { label: "New instructions (v3)", what: "A second attempt at the rewritten instructions, written after v2 made things worse." },
+  "full-v3": { label: "Retries + new instructions (v3)", what: "Both changes together: it retries, and it has the second rewrite (v3)." },
+};
+
+/** What an agent configuration is called and does, in the words of the current mode. */
+export function variantInfo(variant: string): { label: string; what: string } | undefined {
+  return (plainWords() ? PLAIN_VARIANT_INFO : VARIANT_INFO)[variant];
+}
+
 export function variantLabel(variant: string): string {
-  return VARIANT_INFO[variant]?.label ?? variant;
+  return variantInfo(variant)?.label ?? variant;
 }
 
 /**
@@ -113,8 +129,8 @@ const dur = (ms: number | null) => (ms == null ? "–" : formatDuration(ms));
 
 export function costRows(before: CostTotals, after: CostTotals): CostRow[] {
   const rows: CostRow[] = [
-    { label: "Tool calls", before: String(before.tool_calls), after: String(after.tool_calls), change: delta(before.tool_calls, after.tool_calls) },
-    { label: "Model calls", before: String(before.model_calls), after: String(after.model_calls), change: delta(before.model_calls, after.model_calls) },
+    { label: plainWords() ? "Times a tool was used" : "Tool calls", before: String(before.tool_calls), after: String(after.tool_calls), change: delta(before.tool_calls, after.tool_calls) },
+    { label: plainWords() ? "Times the AI model was asked" : "Model calls", before: String(before.model_calls), after: String(after.model_calls), change: delta(before.model_calls, after.model_calls) },
     { label: "Retries", before: String(before.retries), after: String(after.retries), change: delta(before.retries, after.retries) },
     {
       label: "Median run time",
@@ -133,8 +149,8 @@ export function costRows(before: CostTotals, after: CostTotals): CostRow[] {
   ];
   if (before.input_tokens != null && after.input_tokens != null && before.output_tokens != null && after.output_tokens != null) {
     rows.push(
-      { label: "Prompt tokens", before: String(before.input_tokens), after: String(after.input_tokens), change: delta(before.input_tokens, after.input_tokens) },
-      { label: "Reply tokens", before: String(before.output_tokens), after: String(after.output_tokens), change: delta(before.output_tokens, after.output_tokens) },
+      { label: plainWords() ? "Text sent to the AI model (tokens)" : "Prompt tokens", before: String(before.input_tokens), after: String(after.input_tokens), change: delta(before.input_tokens, after.input_tokens) },
+      { label: plainWords() ? "Text the AI model wrote (tokens)" : "Reply tokens", before: String(before.output_tokens), after: String(after.output_tokens), change: delta(before.output_tokens, after.output_tokens) },
     );
   }
   return rows;

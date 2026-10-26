@@ -3,14 +3,17 @@ import { ApiError, ApiUnreachableError } from "../api/client";
 import { useDataSource } from "../api/context";
 import type { CaseChange, Comparison, LabEffect } from "../api/types";
 import { ApiDown } from "../components/ApiDown";
+import { PlainLead, Technical } from "../components/Plain";
+import { compareLead, plainModel } from "../content/plain";
 import { Icon } from "../components/Icon";
 import { RateBar } from "../components/RateBar";
 import { VariantChip } from "../components/VariantChip";
 import { compareHref, evalHref, runHref } from "../hooks/useHashRoute";
 import { useQuery } from "../hooks/useQuery";
-import { CHANGE_LABEL, VARIANT_INFO, costRows, delta, passCounts, sameAgent, variantLabel, verdict } from "../lib/compare";
-import { KIND_LABEL, metricLabel } from "../lib/metrics";
-import { EFFECT_LABEL } from "../lib/notes";
+import { CHANGE_LABEL, costRows, delta, passCounts, sameAgent, variantInfo, variantLabel, verdict } from "../lib/compare";
+import { kindLabel, metricLabel } from "../lib/metrics";
+import { plainWords } from "../lib/plain";
+import { effectLabel } from "../lib/notes";
 
 const ORDER: Record<CaseChange["change"], number> = { broken: 0, fixed: 1, only_baseline: 2, only_candidate: 3, still_failing: 4, still_passing: 5 };
 const MOVED: CaseChange["change"][] = ["broken", "fixed", "only_baseline", "only_candidate"];
@@ -19,33 +22,35 @@ function Head({ baselineId, data }: { baselineId: string; data?: Comparison }) {
   return (
     <>
       <a className="back" href={evalHref(baselineId)}>
-        <Icon name="back" size={15} /> Back to the evaluation
+        <Icon name="back" size={15} /> {plainWords() ? "Back to the results" : "Back to the evaluation"}
       </a>
       <header className="run-head">
         <div className="run-title">
           <span className="pill" data-status="neutral">
             Before and after
           </span>
-          <h1>{data ? `${variantLabel(data.baseline.variant)} → ${variantLabel(data.candidate.variant)}` : "Comparing two evaluations"}</h1>
+          <h1>{data ? `${variantLabel(data.baseline.variant)} → ${variantLabel(data.candidate.variant)}` : (plainWords() ? "Comparing two sets of results" : "Comparing two evaluations")}</h1>
         </div>
         {data && (
           <dl className="facts-row">
             <div>
-              <dt>{KIND_LABEL[data.kind]}</dt>
+              <dt>{kindLabel(data.kind)}</dt>
               <dd>
-                {data.matched} {data.kind === "faultlab" ? "faults" : "cases"} compared
+                {data.matched} {data.kind === "faultlab" ? (plainWords() ? "planted problems" : "faults") : plainWords() ? "test cases" : "cases"} compared
               </dd>
             </div>
             <div>
               <dt>Model</dt>
-              <dd>{data.baseline.model}</dd>
+              <dd>{plainWords() ? plainModel(data.baseline.model) : data.baseline.model}</dd>
             </div>
-            <div>
-              <dt>Dataset</dt>
-              <dd className="mono">
-                {data.baseline.dataset_version} · {data.baseline.dataset_hash}
-              </dd>
-            </div>
+            {!plainWords() && (
+              <div>
+                <dt>Dataset</dt>
+                <dd className="mono">
+                  {data.baseline.dataset_version} · {data.baseline.dataset_hash}
+                </dd>
+              </div>
+            )}
             <div>
               <dt>Before</dt>
               <dd>
@@ -75,7 +80,9 @@ function Headline({ data }: { data: Comparison }) {
   const v = verdict(data);
   const { before, after, total } = passCounts(data);
   const lab = data.kind === "faultlab";
-  const what = lab ? "Faults with no effect on the run" : "Cases that passed both gating checks";
+  const what = lab
+    ? plainWords() ? "Planted problems with no effect on the run" : "Faults with no effect on the run"
+    : plainWords() ? "Cases where the agent finished the job and followed the rules" : "Cases that passed both gating checks";
   return (
     <section className="card verdict" data-tone={v.tone} aria-labelledby="verdict-title">
       <div className="verdict-main">
@@ -122,7 +129,7 @@ function Outcome({ passed, effect }: { passed: boolean | null; effect: LabEffect
   if (effect) {
     return (
       <span className="pill" data-status={effectStatus(effect)}>
-        {EFFECT_LABEL[effect]}
+        {effectLabel(effect)}
       </span>
     );
   }
@@ -374,19 +381,36 @@ function Categories({ data }: { data: Comparison }) {
 }
 
 function Limits({ data }: { data: Comparison }) {
+  const lab = data.kind === "faultlab";
+  const plain = plainWords();
   return (
     <section className="card limits" aria-label="How to read this">
       <h2 className="card-title">How to read this</h2>
       <ul>
         <li>
-          Only {data.kind === "faultlab" ? "faults" : "cases"} both evaluations ran are counted, and the page only exists for two evaluations of the same model, dataset content and kind, so a
-          difference cannot come from a different test.
+          {plain ? (
+            <>
+              Only {lab ? "planted problems" : "test cases"} that both sides ran are counted. This page only exists when both were run on the same AI model and the same {lab ? "problems" : "test cases"},
+              so a difference cannot come from a different test.
+            </>
+          ) : (
+            <>
+              Only {lab ? "faults" : "cases"} both evaluations ran are counted, and the page only exists for two evaluations of the same model, dataset content and kind, so a
+              difference cannot come from a different test.
+            </>
+          )}
         </li>
-        <li>One run per {data.kind === "faultlab" ? "fault" : "case"} on one model, {data.matched} compared. These are counts, not percentages with error bars.</li>
-        <li>Fixed and broken are measured against the checks. A check can be wrong; when one was, it was fixed under a new dataset version and the old results were re-judged, never edited.</li>
-        {data.candidate.variant !== "baseline" && VARIANT_INFO[data.candidate.variant] && (
+        <li>
+          {plain ? "One try per" : "One run per"} {lab ? (plain ? "planted problem" : "fault") : plain ? "test case" : "case"} on one {plain ? "AI " : ""}model, {data.matched} compared. These are counts, not percentages with error bars.
+        </li>
+        <li>
+          {plain
+            ? "Fixed and broken are decided by the checks. A check can be wrong. When one was, I fixed it under a new version of the test cases and judged the old results again. I never edited a result."
+            : "Fixed and broken are measured against the checks. A check can be wrong; when one was, it was fixed under a new dataset version and the old results were re-judged, never edited."}
+        </li>
+        {data.candidate.variant !== "baseline" && variantInfo(data.candidate.variant) && (
           <li>
-            <strong>{variantLabel(data.candidate.variant)}</strong>: {VARIANT_INFO[data.candidate.variant]?.what}
+            <strong>{variantLabel(data.candidate.variant)}</strong>: {variantInfo(data.candidate.variant)?.what}
           </li>
         )}
       </ul>
@@ -436,11 +460,14 @@ export function ComparePage({ baselineId, candidateId }: { baselineId: string; c
               </div>
             </section>
           )}
+          <PlainLead>{compareLead(data)}</PlainLead>
           <Headline data={data} />
           <Cases data={data} />
-          <Checks data={data} />
           <Cost data={data} />
-          <Categories data={data} />
+          <Technical title="Show technical details: results by check and by kind of task">
+            <Checks data={data} />
+            <Categories data={data} />
+          </Technical>
           <Limits data={data} />
           <p className="foot muted small">
             <a href={compareHref(candidateId, baselineId)}>Swap before and after</a>

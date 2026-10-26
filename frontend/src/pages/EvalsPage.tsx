@@ -9,7 +9,10 @@ import { VariantChip } from "../components/VariantChip";
 import { evalHref } from "../hooks/useHashRoute";
 import { useQuery } from "../hooks/useQuery";
 import { timeAgo } from "../lib/format";
-import { KIND_LABEL } from "../lib/metrics";
+import { PlainLead } from "../components/Plain";
+import { EVALS_LEAD, plainDataset, plainModel } from "../content/plain";
+import { kindLabel } from "../lib/metrics";
+import { plainWords } from "../lib/plain";
 
 const BENCHMARK_CMD = "python -m blackbox.evals run --mode ollama";
 
@@ -114,10 +117,10 @@ export function EvalsPage() {
               <table className="runs">
                 <thead>
                   <tr>
-                    <th scope="col">Kind</th>
-                    <th scope="col">Model</th>
+                    <th scope="col">{plainWords() ? "What was tested" : "Kind"}</th>
+                    <th scope="col">{plainWords() ? "AI model" : "Model"}</th>
                     <th scope="col">Agent</th>
-                    <th scope="col">Dataset</th>
+                    <th scope="col">{plainWords() ? "Test set" : "Dataset"}</th>
                     <th scope="col">Cases passed</th>
                     <th scope="col" className="num">
                       Started
@@ -129,20 +132,24 @@ export function EvalsPage() {
                     <tr key={e.eval_id}>
                       <td className="task-cell">
                         <a className="row-link" href={evalHref(e.eval_id)}>
-                          {KIND_LABEL[e.kind]}
+                          {kindLabel(e.kind)}
                         </a>
                         <span className="mono muted small">{e.eval_id}</span>
                       </td>
                       <td>
-                        <span className="model-name">{e.model}</span>
+                        <span className="model-name">{plainWords() ? plainModel(e.model) : e.model}</span>
                       </td>
                       <td>
                         <VariantChip variant={e.variant} rescoredFrom={e.rescored_from} />
                       </td>
                       <td>
-                        <span className="mono small">
-                          {e.dataset_version} · {e.dataset_hash.slice(0, 7)}
-                        </span>
+                        {plainWords() ? (
+                          <span className="small">{plainDataset(e)}</span>
+                        ) : (
+                          <span className="mono small">
+                            {e.dataset_version} · {e.dataset_hash.slice(0, 7)}
+                          </span>
+                        )}
                       </td>
                       <td>
                         {e.status === "running" ? (
@@ -176,14 +183,19 @@ export function EvalsPage() {
 
 function PageHead() {
   return (
+    <>
     <div className="page-head">
       <div>
-        <h1>Evaluations</h1>
-        <p className="lede">
-          Each run is scored against what a correct run looks like. Open an evaluation to see which checks passed for which case, then follow a failure
-          to the exact span.
-        </p>
+        <h1>{plainWords() ? "Results" : "Evaluations"}</h1>
+        {!plainWords() && (
+          <p className="lede">
+            Each run is scored against what a correct run looks like. Open an evaluation to see which checks passed for which case, then follow a failure
+            to the exact span.
+          </p>
+        )}
       </div>
     </div>
+    <PlainLead>{EVALS_LEAD}</PlainLead>
+    </>
   );
 }

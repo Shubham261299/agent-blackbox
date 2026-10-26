@@ -1,7 +1,7 @@
 /// <reference types="vitest/config" />
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { injectDemoMeta } from "./src/lib/demoMeta";
+import { injectDemoMeta } from "./src/lib/demoMeta.ts";
 
 // The UI calls "/api/..."; in dev, Vite forwards that to the FastAPI backend (no CORS needed).
 // BLACKBOX_API points it at another backend when port 8000 is taken.

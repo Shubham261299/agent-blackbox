@@ -12,7 +12,10 @@ import { comparableWith, variantLabel } from "../lib/compare";
 import { useQuery } from "../hooks/useQuery";
 import { median } from "../lib/format";
 import { validationNote } from "../lib/notes";
-import { JUDGED_METRICS, KIND_LABEL, METRICS, kindNote, metricLabel } from "../lib/metrics";
+import { PlainLead, Technical } from "../components/Plain";
+import { evalLead, plainModel } from "../content/plain";
+import { JUDGED_METRICS, kindLabel, kindNote, metricLabel, metricWhat } from "../lib/metrics";
+import { plainWords } from "../lib/plain";
 import { formatDuration } from "../lib/timeScale";
 
 function Cell({ metric, c }: { metric: string; c: EvalCaseResult }) {
@@ -67,7 +70,7 @@ function Matrix({ report }: { report: EvalReport }) {
               <tr>
                 <th scope="col">{validation ? "Fault" : "Case"}</th>
                 {JUDGED_METRICS.map((m) => (
-                  <th key={m} scope="col" className="cell" title={METRICS[m]?.what}>
+                  <th key={m} scope="col" className="cell" title={metricWhat(m)}>
                     {metricLabel(m).replace(" ", " ")}
                     {m === "task_completion" || m === "policy_compliance" ? <span className="gate">gates</span> : null}
                   </th>
@@ -150,7 +153,7 @@ function DetectionTable({ report }: { report: EvalReport }) {
           {rows.map((r) => (
             <tr key={r.metric}>
               <td>
-                <span className="metric-name" title={METRICS[r.metric]?.what}>
+                <span className="metric-name" title={metricWhat(r.metric)}>
                   {metricLabel(r.metric)}
                 </span>
               </td>
@@ -181,11 +184,16 @@ function Summary({ report }: { report: EvalReport }) {
             {report.n_passed}
             <span className="hero-of"> of {report.n_cases}</span>
           </span>
-          <span className="hero-label">{validation ? "faults caught exactly as expected" : "runs passed both gating checks"}</span>
+          <span className="hero-label">
+            {validation
+              ? plainWords() ? "problems caught exactly as expected" : "faults caught exactly as expected"
+              : plainWords() ? "test cases passed: the agent finished the job and followed the rules" : "runs passed both gating checks"}
+          </span>
         </div>
         <p className="kind-note">{kindNote(report)}</p>
       </section>
 
+      <Technical title="Show technical details: results by check and by kind of task">
       <div className="two-up">
         {validation ? (
           <DetectionTable report={report} />
@@ -209,7 +217,7 @@ function Summary({ report }: { report: EvalReport }) {
                 .map((m) => (
                   <tr key={m.metric}>
                     <td>
-                      <span className="metric-name" title={METRICS[m.metric]?.what}>
+                      <span className="metric-name" title={metricWhat(m.metric)}>
                         {metricLabel(m.metric)}
                       </span>
                       {m.gating && <span className="gate">gates the run</span>}
@@ -257,6 +265,7 @@ function Summary({ report }: { report: EvalReport }) {
           </section>
         )}
       </div>
+      </Technical>
     </>
   );
 }
@@ -311,7 +320,7 @@ export function EvalReportPage({ evalId }: { evalId: string }) {
   return (
     <>
       <a className="back" href="#/evals">
-        <Icon name="back" size={15} /> All evaluations
+        <Icon name="back" size={15} /> {plainWords() ? "All results" : "All evaluations"}
       </a>
 
       {report.error instanceof ApiUnreachableError && !data ? (
@@ -333,26 +342,28 @@ export function EvalReportPage({ evalId }: { evalId: string }) {
             <div className="run-title">
               <span className="pill" data-status={data.status === "running" ? "running" : data.status === "error" ? "error" : "neutral"}>
                 {data.status === "running" && <Icon name="spinner" size={13} className="spin" />}
-                {KIND_LABEL[data.kind]}
+                {kindLabel(data.kind)}
                 {data.status === "running" ? " · running" : data.status === "error" ? " · failed" : ""}
               </span>
-              <h1>{data.model}</h1>
+              <h1>{plainWords() ? plainModel(data.model) : data.model}</h1>
               <VariantChip variant={data.variant} rescoredFrom={data.rescored_from} />
             </div>
             <dl className="facts-row">
+              {!plainWords() && (
+                <div>
+                  <dt>Dataset</dt>
+                  <dd>
+                    <span className="mono">
+                      {data.dataset_version} · {data.dataset_hash}
+                    </span>
+                  </dd>
+                </div>
+              )}
               <div>
-                <dt>Dataset</dt>
-                <dd>
-                  <span className="mono">
-                    {data.dataset_version} · {data.dataset_hash}
-                  </span>
-                </dd>
-              </div>
-              <div>
-                <dt>Cases</dt>
+                <dt>{plainWords() ? "Test cases" : "Cases"}</dt>
                 <dd>{data.n_cases}</dd>
               </div>
-              {data.seed != null && (
+              {data.seed != null && !plainWords() && (
                 <div>
                   <dt>Seed</dt>
                   <dd>{data.seed}</dd>
@@ -362,13 +373,16 @@ export function EvalReportPage({ evalId }: { evalId: string }) {
                 <dt>Started</dt>
                 <dd title={new Date(data.started_at).toLocaleString()}>{new Date(data.started_at).toLocaleTimeString()}</dd>
               </div>
-              <div>
-                <dt>Evaluation</dt>
-                <dd className="mono">{data.eval_id}</dd>
-              </div>
+              {!plainWords() && (
+                <div>
+                  <dt>Evaluation</dt>
+                  <dd className="mono">{data.eval_id}</dd>
+                </div>
+              )}
             </dl>
             <ComparePicker report={data} />
           </header>
+          {data.status !== "running" && <PlainLead>{evalLead(data)}</PlainLead>}
 
           {data.status === "running" && data.n_cases === 0 ? (
             <section className="card outcome" data-status="running" role="status">
@@ -384,9 +398,16 @@ export function EvalReportPage({ evalId }: { evalId: string }) {
             ) : (
               <>
                 <Summary report={data} />
-                <Matrix report={data} />
+                <Technical title="Show technical details: every check for every case">
+                  <Matrix report={data} />
+                </Technical>
               </>
             )
+          )}
+          {plainWords() && (
+            <p className="foot muted small">
+              Identifiers: {data.eval_id} · test set {data.dataset_version} ({data.dataset_hash}){data.seed != null ? ` · seed ${data.seed}` : ""}
+            </p>
           )}
         </>
       )}

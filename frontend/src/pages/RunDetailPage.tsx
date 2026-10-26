@@ -6,6 +6,8 @@ import { ApiDown } from "../components/ApiDown";
 import { CopyButton } from "../components/CopyButton";
 import { VariantChip } from "../components/VariantChip";
 import { EvaluationCard } from "../components/EvaluationCard";
+import { PlainRun } from "../components/PlainRun";
+import { Technical } from "../components/Plain";
 import { Icon } from "../components/Icon";
 import { RedactedText } from "../components/RedactedText";
 import { SpanInspector } from "../components/SpanInspector";
@@ -13,6 +15,7 @@ import { RunStatusPill } from "../components/StatusPill";
 import { Legend, SpanTable, Waterfall } from "../components/Waterfall";
 import { useQuery } from "../hooks/useQuery";
 import { clockTime, splitModel } from "../lib/format";
+import { plainWords } from "../lib/plain";
 import { buildRows } from "../lib/spanTree";
 import { formatDuration } from "../lib/timeScale";
 
@@ -80,7 +83,8 @@ function Outcome({ run }: { run: RunRecord }) {
   );
 }
 
-function Trace({ spans, evaluation, faults = [] }: { spans: SpanRecord[]; evaluation?: RunEvaluation; faults?: RunFault[] }) {
+function Trace({ run, spans, evaluation, faults = [] }: { run: RunRecord; spans: SpanRecord[]; evaluation?: RunEvaluation; faults?: RunFault[] }) {
+  const plain = plainWords();
   const [selectedId, setSelectedId] = useState<string | null>(() => defaultSelection(spans, evaluation));
   const [view, setView] = useState<"waterfall" | "table">("waterfall");
   const selected = useMemo(() => spans.find((s) => s.span_id === selectedId) ?? null, [spans, selectedId]);
@@ -98,25 +102,31 @@ function Trace({ spans, evaluation, faults = [] }: { spans: SpanRecord[]; evalua
         <section className="card planted" aria-label="Planted fault">
           <Icon name="alert" size={16} />
           <div>
-            <strong>Failure lab: a fault was planted in this run</strong>
+            <strong>{plain ? "Failure lab: a problem was planted in this run" : "Failure lab: a fault was planted in this run"}</strong>
             <ul>
               {faults.map((f) => (
                 <li key={f.description}>
                   <span className="mono">{f.description}</span>
                   {f.origin_span_id ? (
-                    <button type="button" className="chip" onClick={() => setSelectedId(f.origin_span_id)}>
-                      Show the planted span
-                    </button>
+                    !plain && (
+                      <button type="button" className="chip" onClick={() => setSelectedId(f.origin_span_id)}>
+                        Show the planted span
+                      </button>
+                    )
                   ) : (
                     <span className="muted small"> (it never fired)</span>
                   )}
                 </li>
               ))}
             </ul>
-            <p className="muted small">This is recorded outside the trace, so trace analysis is not told about it.</p>
+            <p className="muted small">
+              {plain ? "This is recorded separately, so the analysis is not told about it." : "This is recorded outside the trace, so trace analysis is not told about it."}
+            </p>
           </div>
         </section>
       )}
+      {plain && <PlainRun run={run} spans={spans} evaluation={evaluation} />}
+      <Technical title="Show technical details: the checks and the full trace">
       {evaluation && <EvaluationCard evaluation={evaluation} onShowSpan={setSelectedId} />}
       <div className="trace-layout">
       <section className="card trace" aria-labelledby="trace-title">
@@ -149,12 +159,13 @@ function Trace({ spans, evaluation, faults = [] }: { spans: SpanRecord[]; evalua
       </section>
       <SpanInspector span={selected} spans={spans} onSelect={setSelectedId} findings={findings} />
       </div>
+      </Technical>
     </>
   );
 }
 
 /** Mounts only once a run has finished, so it can never show data left over from "not loaded yet". */
-function TraceSection({ runId }: { runId: string }) {
+function TraceSection({ run, runId }: { run: RunRecord; runId: string }) {
   const source = useDataSource();
   const spans = useQuery(() => source.getSpans(runId), [source, runId]);
   // The evaluation is a bonus: if it cannot be loaded the trace is still shown without it.
@@ -180,7 +191,7 @@ function TraceSection({ runId }: { runId: string }) {
         <p>This run has no trace data, so there is nothing to inspect.</p>
       </section>
     );
-  return <Trace spans={spans.data} evaluation={evaluation.data} faults={faults.data} />;
+  return <Trace run={run} spans={spans.data} evaluation={evaluation.data} faults={faults.data} />;
 }
 
 export function RunDetailPage({ runId }: { runId: string }) {
@@ -249,7 +260,7 @@ export function RunDetailPage({ runId }: { runId: string }) {
                 <dt>Started</dt>
                 <dd title={new Date(run.data.started_at).toLocaleString()}>{clockTime(run.data.started_at)}</dd>
               </div>
-              {run.data.trace_id && (
+              {run.data.trace_id && !plainWords() && (
                 <div>
                   <dt>Trace</dt>
                   <dd>
@@ -267,7 +278,7 @@ export function RunDetailPage({ runId }: { runId: string }) {
 
           <Outcome run={run.data} />
 
-          {run.data.status !== "running" && <TraceSection key={run.data.status} runId={runId} />}
+          {run.data.status !== "running" && <TraceSection key={run.data.status} run={run.data} runId={runId} />}
         </>
       )}
     </>

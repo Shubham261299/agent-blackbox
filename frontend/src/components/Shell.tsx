@@ -47,7 +47,7 @@ export function Shell({ children, demo, route }: { children: ReactNode; demo: bo
               Runs
             </a>
             <a href="#/evals" aria-current={inEvals ? "page" : undefined}>
-              Evaluations
+              {demo ? "Results" : "Evaluations"}
             </a>
           </nav>
           <div className="topbar-right">

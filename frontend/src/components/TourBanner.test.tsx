@@ -36,7 +36,7 @@ describe("TourBanner", () => {
     renderBanner(`${STOPS[0]}?tour=1`);
     const banner = await screen.findByRole("complementary", { name: "Guided tour" });
     expect(banner).toHaveTextContent("Guided tour · Stop 1 of 4: A run that failed");
-    expect(banner).toHaveTextContent("Find the red bar in the trace");
+    expect(banner).toHaveTextContent("The list shows what the agent did, step by step");
   });
 
   it("goes back to the start from the first stop and on to the second", async () => {

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { RunRecord, RunStatus } from "../api/types";
 import { formatDuration } from "../lib/timeScale";
 import { median, splitModel, timeAgo } from "../lib/format";
+import { plainWords } from "../lib/plain";
 import { runHref } from "../hooks/useHashRoute";
 import { RunStatusPill } from "./StatusPill";
 import { Icon } from "./Icon";
@@ -109,8 +110,14 @@ export function RunTable({ runs }: { runs: RunRecord[] }) {
                       <span className="mono muted small">{run.run_id}</span>
                     </td>
                     <td>
-                      <span className="model-name">{model.name}</span>
-                      {model.provider && <span className="muted small"> {model.provider}</span>}
+                      {plainWords() && model.provider === "scripted" ? (
+                        <span className="model-name">Scripted example</span>
+                      ) : (
+                        <>
+                          <span className="model-name">{model.name}</span>
+                          {model.provider && <span className="muted small"> {model.provider}</span>}
+                        </>
+                      )}
                     </td>
                     <td className="num mono">{run.duration_ms == null ? "–" : formatDuration(run.duration_ms)}</td>
                     <td className="num muted" title={new Date(run.started_at).toLocaleString()}>

@@ -22,8 +22,8 @@ export function tourStops(tour: DemoManifest["tour"], fixed?: Comparison, regres
     stops.push({
       title: "A run that failed",
       href: runHref(tour.failed_run),
-      text: "A real run where a tool did not answer in time. The trace shows the step that failed in red, and “Where to look first” names it.",
-      notice: "Find the red bar in the trace, and the line “Where to look first” above it. They name the same step: the one that failed.",
+      text: "A real run where a tool did not answer in time. The page lists what the agent did step by step, marks the step that failed, and says where to look first.",
+      notice: "The list shows what the agent did, step by step. The step marked as failed is where it went wrong, and “Where to look first” names it.",
     });
   }
   if (tour.lab) {

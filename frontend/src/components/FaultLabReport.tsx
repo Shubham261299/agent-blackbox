@@ -1,6 +1,8 @@
 import type { EvalReport, FaultLabNote, LabRunSummary } from "../api/types";
 import { runHref } from "../hooks/useHashRoute";
-import { EFFECT_LABEL, EFFECT_TEXT, labNote, verdictText } from "../lib/notes";
+import { plainSource, plainStepName } from "../content/plain";
+import { effectLabel, effectText, labNote, verdictText } from "../lib/notes";
+import { plainWords } from "../lib/plain";
 import { kindNote, metricLabel } from "../lib/metrics";
 import { formatDuration } from "../lib/timeScale";
 import { Icon } from "./Icon";
@@ -10,8 +12,8 @@ const runLabel = (r: LabRunSummary) => (r.run_status === "error" ? "Failed" : "C
 function Compare({ note }: { note: FaultLabNote }) {
   const rows: [string, string, string][] = [
     ["Run", runLabel(note.control), runLabel(note.faulted)],
-    ["Gating checks", note.control.gating_passed ? "Passed" : "Failed", note.faulted.gating_passed ? "Passed" : "Failed"],
-    ["Tool calls", String(note.control.tool_calls), String(note.faulted.tool_calls)],
+    [plainWords() ? "Pass-or-fail rules" : "Gating checks", note.control.gating_passed ? "Passed" : "Failed", note.faulted.gating_passed ? "Passed" : "Failed"],
+    [plainWords() ? "Times a tool was used" : "Tool calls", String(note.control.tool_calls), String(note.faulted.tool_calls)],
     [
       "Time",
       note.control.duration_ms == null ? "–" : formatDuration(note.control.duration_ms),
@@ -25,12 +27,12 @@ function Compare({ note }: { note: FaultLabNote }) {
   ];
   return (
     <table className="lab-compare">
-      <caption className="sr-only">Control run against the run with the fault</caption>
+      <caption className="sr-only">{plainWords() ? "Control run against the run with the planted problem" : "Control run against the run with the fault"}</caption>
       <thead>
         <tr>
           <th scope="col" />
           <th scope="col">Control</th>
-          <th scope="col">With the fault</th>
+          <th scope="col">{plainWords() ? "With the problem" : "With the fault"}</th>
         </tr>
       </thead>
       <tbody>
@@ -55,7 +57,7 @@ function FaultCard({ title, note, runId }: { title: string; note: FaultLabNote; 
           <p className="mono muted small">Planted: {note.injected}</p>
         </div>
         <span className="pill" data-status={note.effect === "no_effect" ? "ok" : note.effect === "silent" ? "warn" : "error"}>
-          {EFFECT_LABEL[note.effect]}
+          {effectLabel(note.effect)}
         </span>
       </header>
       <p className="lab-desc">{note.description}</p>
@@ -64,19 +66,19 @@ function FaultCard({ title, note, runId }: { title: string; note: FaultLabNote; 
         <section aria-label={`Effect of ${title}`}>
           <h4>What it did to the run</h4>
           <Compare note={note} />
-          <p className="lab-effect">{EFFECT_TEXT[note.effect]}</p>
+          <p className="lab-effect">{effectText(note.effect)}</p>
         </section>
 
         <section aria-label={`Where analysis points for ${title}`}>
-          <h4>Where trace analysis says to look</h4>
+          <h4>{plainWords() ? "Where the analysis says to look" : "Where trace analysis says to look"}</h4>
           {note.suspects.length === 0 ? (
-            <p className="muted">No span stood out.</p>
+            <p className="muted">{plainWords() ? "No step stood out." : "No span stood out."}</p>
           ) : (
             <ol className="suspects">
               {note.suspects.map((s) => (
                 <li key={s.span_id} data-planted={s.span_id === note.origin_span_id}>
-                  <span className="mono">{s.span_name}</span>
-                  <span className="muted small"> · {s.source}</span>
+                  {plainWords() ? <strong>{plainStepName(s.span_name)}</strong> : <span className="mono">{s.span_name}</span>}
+                  <span className="muted small"> · {plainWords() ? plainSource(s.source) : s.source}</span>
                   {s.span_id === note.origin_span_id && <span className="planted-badge">planted here</span>}
                   <span className="suspect-reason">{s.reason}</span>
                 </li>
@@ -92,7 +94,7 @@ function FaultCard({ title, note, runId }: { title: string; note: FaultLabNote; 
 
       <footer className="lab-links">
         <a className="ext" href={runHref(runId)}>
-          Open the run with the fault
+          {plainWords() ? "Open the run with the problem" : "Open the run with the fault"}
         </a>
         <a className="ext" href={runHref(note.control.run_id)}>
           Open the control run
@@ -115,7 +117,7 @@ export function FaultLabReport({ report }: { report: EvalReport }) {
             {report.n_passed}
             <span className="hero-of"> of {report.n_cases}</span>
           </span>
-          <span className="hero-label">faults located at the right span</span>
+          <span className="hero-label">{plainWords() ? "planted problems pointed at the right step" : "faults located at the right span"}</span>
         </div>
         <p className="kind-note">{kindNote(report)}</p>
       </section>

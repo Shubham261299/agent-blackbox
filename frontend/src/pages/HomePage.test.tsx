@@ -126,7 +126,7 @@ describe("the front page in the app", () => {
     expect(within(nav).getAllByRole("link").map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
       ["Overview", "#/"],
       ["Runs", "#/runs"],
-      ["Evaluations", "#/evals"],
+      ["Results", "#/evals"],
     ]);
     expect(within(nav).getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
   });
@@ -144,6 +144,7 @@ describe("the front page in the app", () => {
     const nav = screen.getByRole("navigation", { name: "Main" });
     expect(within(nav).queryByRole("link", { name: "Overview" })).not.toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "Runs" })).toHaveAttribute("href", "#/");
+    expect(within(nav).getByRole("link", { name: "Evaluations" })).toHaveAttribute("href", "#/evals"); // the live app keeps its own name for them
     expect(MANIFEST.counts.runs).toBeGreaterThan(0);
   });
 

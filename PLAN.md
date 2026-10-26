@@ -25,7 +25,7 @@
 - Decisions already taken: 24 golden cases (golden-v3 current: golden-v2 with C1/C4 answer patterns widened after triage; v2 stays loadable), option B (only the order id of an address change is verified; keyed digest "option A" is a later extension), judged DeepEval subset of 6 on Day 7, qwen2.5:7b only.
 
 **How to run things (Windows, from the repo root; venv is `.venv`):**
-- Tests: `.venv\Scripts\python -m pytest` (511 backend, 1 needs Jaeger) and `cd frontend; npm test` (214), `npx tsc --noEmit`, `npm run build`.
+- Tests: `.venv\Scripts\python -m pytest` (511 backend, 1 needs Jaeger) and `cd frontend; npm test` (278), `npx tsc --noEmit`, `npm run build`.
 - API: `uvicorn --app-dir backend --factory blackbox.api.main:create_app --port 8000`; UI: `cd frontend; npm run dev` (port 5173). **Ports 8000, 8001 and 8765 are used by other projects on this machine** (check with `Get-NetTCPConnection -LocalPort <p> -State Listen` before starting; never kill a process you did not start). Pick a free port, start the API on it, and point the UI at it: `$env:BLACKBOX_API="http://127.0.0.1:<port>"; npm run dev -- --port 5190 --strictPort`. The Windows venv launcher spawns a child process, so record the listener PID (not just the launcher) to stop it.
 - Jaeger: `docker compose up -d jaeger` (container `jaeger`, UI 16686, restarts with Docker). The whole stack: `docker compose up --build` (dashboard on 8080; ports are movable by `BLACKBOX_*` variables, see docker-compose.yml). Install: `pip install -e .` runs the app, `".[dev]"` adds the tests and Pillow.
 - Evaluations: `python -m blackbox.evals run --mode reference|faults|ollama|faultlab|faultlab-ollama [--variant baseline|resilient|guided|full|guided-v3|full-v3] [--dataset golden-v3|holdout-v1]`; `compare <before> <after>`; `rescore <eval> --dataset golden-v3`. Real-model runs take minutes on CPU.
@@ -123,7 +123,7 @@ Rough target, ordered by what the audience sees first. A day is done only when i
 - [x] Stage 0: the words, approved 2026-10-26
 - [x] Stage 1: plain-language front page at `#/` (every figure from the stored results), link preview tags and card, run list moved to `#/runs`; 193 frontend and 511 backend tests
 - [x] Stage 2: guided tour (banner with Back / Next on the four stops, entered from the front page); 214 frontend tests
-- [ ] Stage 3: plain-words layer, "In plain words" boxes, technical parts folded away, plain run timeline
+- [x] Stage 3: plain-words layer (demo only): everyday vocabulary, "In plain words" boxes, a run told step by step, technical parts folded away, interesting runs listed first; 278 frontend tests
 - [ ] Stage 4: jargon and reading-level tests, real-person test
 - [ ] Stage 5: README leads with the plain version; screenshots, GIF, card regenerated; one push
 
