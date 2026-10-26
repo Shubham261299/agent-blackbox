@@ -1,40 +1,15 @@
 import { act, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
-import { ApiError, ApiUnreachableError, type DataSource } from "../api/client";
+import { ApiUnreachableError, type DataSource } from "../api/client";
 import { DataSourceContext } from "../api/context";
-import type { DemoManifest } from "../api/types";
 import { RunsPage } from "../pages/RunsPage";
 import { EvalsPage } from "../pages/EvalsPage";
-import { comparison, evalReport } from "../test/factories";
+import { MANIFEST, demoSource } from "../test/demoSource";
+import { evalReport } from "../test/factories";
 import { fakeSource } from "../test/fakeSource";
 import { AboutDemo, REPO_URL, formatDay } from "./AboutDemo";
 import { ApiDown } from "./ApiDown";
-import { StartHere } from "./StartHere";
-
-const MANIFEST: DemoManifest = {
-  format: 1,
-  models: ["ollama:qwen2.5:7b"],
-  recorded_from: "2026-10-14",
-  recorded_to: "2026-10-19",
-  counts: { runs: 173, spans: 883, evaluations: 11, comparisons: 20, refused_pairs: 101 },
-  evaluations: [],
-  tour: { failed_run: "run-e92cfa5d", lab: "eval-lab", fixed: ["eval-lab", "eval-res"], regressed: ["eval-bench", "eval-guided"] },
-};
-
-function demoSource(over: Partial<DataSource> = {}): DataSource {
-  return fakeSource({
-    kind: "demo",
-    canStartRuns: false,
-    canStartEvals: false,
-    traceUrl: () => null,
-    demoInfo: vi.fn().mockResolvedValue(MANIFEST),
-    compare: vi.fn().mockImplementation(async (a: string) =>
-      a === "eval-lab" ? comparison({ matched: 4, fixed: 3, broken: 0 }) : comparison({ matched: 24, fixed: 2, broken: 5 }),
-    ),
-    ...over,
-  });
-}
 
 function inProvider(source: DataSource, ui: React.ReactNode) {
   return render(<DataSourceContext.Provider value={source}>{ui}</DataSourceContext.Provider>);
@@ -44,43 +19,6 @@ beforeEach(() => {
   window.location.hash = "";
 });
 afterEach(() => vi.useRealTimers());
-
-describe("StartHere", () => {
-  it("shows the four stops with links, and numbers read from the stored comparisons", async () => {
-    inProvider(demoSource(), <StartHere />);
-    const card = await screen.findByRole("region", { name: /Start here/ });
-    const links = within(card).getAllByRole("link");
-    expect(links.map((l) => l.getAttribute("href"))).toEqual([
-      "#/runs/run-e92cfa5d",
-      "#/evals/eval-lab",
-      "#/compare/eval-lab/eval-res",
-      "#/compare/eval-bench/eval-guided",
-    ]);
-    expect(within(card).getAllByRole("listitem")).toHaveLength(4);
-    expect(card).toHaveTextContent("3 now have no effect on the run");
-    expect(card).toHaveTextContent("On 24 cases it fixed 2 and broke 5.");
-  });
-
-  it("still shows the stops, without numbers, when a comparison cannot be loaded", async () => {
-    inProvider(demoSource({ compare: vi.fn().mockRejectedValue(new ApiError("not in this demo", 404)) }), <StartHere />);
-    const card = await screen.findByRole("region", { name: /Start here/ });
-    expect(within(card).getAllByRole("link")).toHaveLength(4);
-    expect(card).not.toHaveTextContent("planted faults,");
-  });
-
-  it("is absent from the live app, which has no demo information", async () => {
-    const live = fakeSource();
-    inProvider(live, <StartHere />);
-    await act(async () => {});
-    expect(screen.queryByRole("region")).not.toBeInTheDocument();
-  });
-
-  it("is absent when the data holds no tour", async () => {
-    inProvider(demoSource({ demoInfo: vi.fn().mockResolvedValue({ ...MANIFEST, tour: {} }) }), <StartHere />);
-    await act(async () => {});
-    expect(screen.queryByRole("region")).not.toBeInTheDocument();
-  });
-});
 
 describe("AboutDemo", () => {
   it("says what was recorded, from which model, when, that nothing is live, and links to the source", async () => {
@@ -111,16 +49,15 @@ describe("AboutDemo", () => {
 });
 
 describe("the demo in the pages", () => {
-  it("puts the tour on the landing page and no start-a-run form", async () => {
+  it("lists the runs in the demo without a start-a-run form", async () => {
     inProvider(demoSource(), <RunsPage />);
-    expect(await screen.findByRole("region", { name: /Start here/ })).toBeInTheDocument();
+    expect(await screen.findByRole("table")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Start a run" })).not.toBeInTheDocument();
   });
 
-  it("keeps the tour off the live landing page, which has the start-a-run form", async () => {
+  it("keeps the start-a-run form on the live run list", async () => {
     inProvider(fakeSource(), <RunsPage />);
     expect(await screen.findByRole("region", { name: "Start a run" })).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: /Start here/ })).not.toBeInTheDocument();
   });
 
   it("does not keep re-fetching recorded data", async () => {
@@ -169,6 +106,7 @@ describe("ApiDown in the demo", () => {
 
 describe("the app shell", () => {
   it("says it is recorded and carries the about line in the demo", async () => {
+    window.location.hash = "#/runs";
     render(<App source={demoSource()} />);
     expect(await screen.findByLabelText("About this demo")).toBeInTheDocument();
     expect(screen.getByText("Recorded demo data")).toBeInTheDocument();

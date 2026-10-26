@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { injectDemoMeta } from "./src/lib/demoMeta";
 
 // The UI calls "/api/..."; in dev, Vite forwards that to the FastAPI backend (no CORS needed).
 // BLACKBOX_API points it at another backend when port 8000 is taken.
@@ -11,7 +12,11 @@ export default defineConfig(({ mode }) => ({
   base: mode === "demo" ? "./" : "/",
   publicDir: mode === "demo" ? "public" : false,
   build: { outDir: mode === "demo" ? "dist-demo" : "dist" },
-  plugins: [react()],
+  plugins: [
+    react(),
+    // Only the recorded demo gets its own title and link-preview tags; the live app's page is left as it is.
+    { name: "demo-meta", transformIndexHtml: (html: string) => (mode === "demo" ? injectDemoMeta(html) : html) },
+  ],
   server: {
     port: 5173,
     proxy: {

@@ -225,3 +225,22 @@ def test_the_committed_gif_is_small_and_has_the_six_frames():
     with Image.open(committed) as g:
         assert g.n_frames == 6 and g.size == gif.SIZE and g.info["loop"] == 0
     assert time.time() > 0
+
+
+def test_main_also_puts_the_gif_where_the_demo_site_picks_it_up(tmp_path, monkeypatch):
+    def fake_build(site, out, *args, **kwargs):
+        Path(out).parent.mkdir(parents=True, exist_ok=True)
+        Path(out).write_bytes(b"GIF89a-test")
+        return out
+
+    monkeypatch.setattr(gif, "build", fake_build)
+    out, copy = tmp_path / "docs" / "demo.gif", tmp_path / "site" / "public" / "tour.gif"
+    assert gif.main(["--out", str(out), "--site-copy", str(copy)]) == 0
+    assert copy.read_bytes() == out.read_bytes() == b"GIF89a-test"
+
+
+def test_the_committed_site_copy_is_the_same_gif_as_the_readmes():
+    docs, site = ROOT / "docs" / "images" / "demo.gif", ROOT / "frontend" / "public" / "tour.gif"
+    if not (docs.exists() and site.exists()):
+        pytest.skip("gif not generated")
+    assert docs.read_bytes() == site.read_bytes()

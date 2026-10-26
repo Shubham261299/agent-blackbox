@@ -291,8 +291,11 @@ def test_the_tour_points_at_the_failed_run_the_lab_and_the_two_comparisons():
     class Report:
         cases = [Case("run-1", "wrong_tool"), Case("run-2", "tool_timeout")]
 
-    assert tour({lab_b: Report, lab_r: Report, bench_b: Report, bench_g: Report}) == {
-        "failed_run": "run-2", "lab": lab_b, "fixed": [lab_b, lab_r], "regressed": [bench_b, bench_g]}
+    bench_g3, hold = CURATED["benchmark golden-v3: guided v3"], CURATED["held-out holdout-v1: baseline"]
+    assert tour({lab_b: Report, lab_r: Report, bench_b: Report, bench_g: Report, bench_g3: Report, hold: Report}) == {
+        "failed_run": "run-2", "lab": lab_b, "fixed": [lab_b, lab_r], "regressed": [bench_b, bench_g],
+        "second_attempt": [bench_b, bench_g3], "holdout": hold}
+    assert "second_attempt" not in tour({lab_b: Report, bench_b: Report, bench_g: Report})
     assert tour({lab_b: Report}) == {"failed_run": "run-2"}  # without the resilient lab there is no "fixed" stop
     assert tour({}) == {}
 
@@ -303,10 +306,10 @@ def test_the_manifest_carries_the_tour(two_evals, monkeypatch):
     service, a, b = two_evals
     case = service.store.get_eval_report(a).cases[0]
     service.store.save_eval_case(a, case.model_copy(update={"case_id": "tool_timeout", "note": lab_note(service, case.run_id, case.run_id)}))
-    for name, value in (("LAB_BASELINE", a), ("LAB_RESILIENT", b), ("BENCH_BASELINE", a), ("BENCH_GUIDED", b)):
+    for name, value in (("LAB_BASELINE", a), ("LAB_RESILIENT", b), ("BENCH_BASELINE", a), ("BENCH_GUIDED", b), ("BENCH_GUIDED_V3", b), ("HOLDOUT_BASELINE", a)):
         monkeypatch.setattr(module, name, value)
     manifest = build_demo(service.store, [a, b])[MANIFEST]
-    assert manifest["tour"] == {"failed_run": case.run_id, "lab": a, "fixed": [a, b], "regressed": [a, b]}
+    assert manifest["tour"] == {"failed_run": case.run_id, "lab": a, "fixed": [a, b], "regressed": [a, b], "second_attempt": [a, b], "holdout": a}
 
 
 def test_a_tour_pointing_at_something_that_was_not_exported_stops_the_export(two_evals):

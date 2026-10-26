@@ -269,5 +269,9 @@ export interface DemoManifest {
     lab?: string;
     fixed?: [string, string];
     regressed?: [string, string];
+    /** Baseline against the second rewrite of the instructions. */
+    second_attempt?: [string, string];
+    /** The held-out evaluation (the cases kept hidden while tuning). */
+    holdout?: string;
   };
 }

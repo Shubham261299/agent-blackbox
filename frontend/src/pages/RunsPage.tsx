@@ -2,7 +2,6 @@ import { ApiUnreachableError } from "../api/client";
 import { useDataSource } from "../api/context";
 import { ApiDown } from "../components/ApiDown";
 import { RunTable, StatStrip } from "../components/RunTable";
-import { StartHere } from "../components/StartHere";
 import { StartRunPanel } from "../components/StartRunPanel";
 import { useQuery } from "../hooks/useQuery";
 
@@ -27,7 +26,6 @@ export function RunsPage() {
         <ApiDown onRetry={runs.refetch} />
       ) : (
         <>
-          {source.kind === "demo" && <StartHere />}
           {source.canStartRuns && <StartRunPanel scenarios={scenarios.data ?? []} />}
           {runs.loading && !runs.data ? (
             <p className="muted" role="status">

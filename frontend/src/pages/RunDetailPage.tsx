@@ -195,7 +195,7 @@ export function RunDetailPage({ runId }: { runId: string }) {
 
   return (
     <>
-      <a className="back" href="#/">
+      <a className="back" href="#/runs">
         <Icon name="back" size={15} /> All runs
       </a>
 

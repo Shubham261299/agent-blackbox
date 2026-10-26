@@ -121,7 +121,7 @@ describe("variants and the compare route", () => {
   it("parses #/compare/<before>/<after> and not the evaluation routes", () => {
     expect(parseHash("#/compare/eval-a/eval-b")).toEqual({ name: "compare", baseline: "eval-a", candidate: "eval-b" });
     expect(parseHash("#/compare/eval%20a/eval-b")).toEqual({ name: "compare", baseline: "eval a", candidate: "eval-b" });
-    expect(parseHash("#/compare/eval-a")).toEqual({ name: "runs" }); // incomplete: falls back to the landing page
+    expect(parseHash("#/compare/eval-a")).toEqual({ name: "home" }); // incomplete: falls back to the landing page
     expect(parseHash("#/evals/eval-a")).toEqual({ name: "eval", evalId: "eval-a" });
   });
 });

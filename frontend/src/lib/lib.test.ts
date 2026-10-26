@@ -141,13 +141,15 @@ describe("format helpers", () => {
 
 describe("routes", () => {
   it("parses run, evaluation and default routes", () => {
-    expect(parseHash("")).toEqual({ name: "runs" });
-    expect(parseHash("#/")).toEqual({ name: "runs" });
+    expect(parseHash("")).toEqual({ name: "home" });
+    expect(parseHash("#/")).toEqual({ name: "home" });
+    expect(parseHash("#/runs")).toEqual({ name: "runs" });
+    expect(parseHash("#/runs/")).toEqual({ name: "runs" });
+    expect(parseHash("#/nonsense")).toEqual({ name: "home" });
     expect(parseHash("#/runs/run-1")).toEqual({ name: "run", runId: "run-1" });
     expect(parseHash("#/evals")).toEqual({ name: "evals" });
     expect(parseHash("#/evals/")).toEqual({ name: "evals" });
     expect(parseHash("#/evals/eval-9")).toEqual({ name: "eval", evalId: "eval-9" });
-    expect(parseHash("#/nonsense")).toEqual({ name: "runs" });
   });
 });
 

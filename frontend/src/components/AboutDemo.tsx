@@ -1,8 +1,9 @@
 import { useDataSource } from "../api/context";
 import { useQuery } from "../hooks/useQuery";
+import { REPO_URL } from "../content/story";
 import { splitModel } from "../lib/format";
 
-export const REPO_URL = "https://github.com/Shubham261299/agent-blackbox";
+export { REPO_URL };
 
 /** "2026-10-14" -> "14 October 2026", whatever the viewer's time zone. */
 export function formatDay(day: string): string {

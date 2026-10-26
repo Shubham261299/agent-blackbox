@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEMO_DATA = ROOT / "frontend" / "public" / "demo-data"
 SITE = ROOT / "frontend" / "dist-demo"
 OUT = ROOT / "docs" / "images" / "demo.gif"
+SITE_COPY = ROOT / "frontend" / "public" / "tour.gif"  # the demo's front page shows the same GIF
 
 VIEW = (1280, 720)         # what is shown of each page
 SIZE = (960, 540)          # the GIF's size
@@ -206,9 +207,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--site", type=Path, default=SITE, help="the built demo (default: frontend/dist-demo)")
     parser.add_argument("--out", type=Path, default=OUT)
+    parser.add_argument("--site-copy", type=Path, default=SITE_COPY, help="where the demo site picks the GIF up (default: frontend/public/tour.gif)")
     args = parser.parse_args(argv)
     out = build(args.site, args.out)
-    print(f"wrote {out} ({out.stat().st_size // 1024} kB)")
+    args.site_copy.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(out, args.site_copy)
+    print(f"wrote {out} ({out.stat().st_size // 1024} kB) and {args.site_copy}")
     return 0
 
 

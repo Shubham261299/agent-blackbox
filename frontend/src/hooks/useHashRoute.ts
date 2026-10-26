@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 export type Route =
+  | { name: "home" }
   | { name: "runs" }
   | { name: "run"; runId: string }
   | { name: "evals" }
@@ -15,9 +16,12 @@ export function parseHash(hash: string): Route {
   const evalRun = /^#\/evals\/([^/?#]+)/.exec(hash);
   if (evalRun) return { name: "eval", evalId: decodeURIComponent(evalRun[1] as string) };
   if (/^#\/evals\/?$/.test(hash)) return { name: "evals" };
-  return { name: "runs" };
+  if (/^#\/runs\/?$/.test(hash)) return { name: "runs" };
+  return { name: "home" }; // the front page; the live app shows its run list there
 }
 
+export const HOME_HREF = "#/";
+export const RUNS_HREF = "#/runs";
 export const runHref = (runId: string) => `#/runs/${encodeURIComponent(runId)}`;
 export const evalHref = (evalId: string) => `#/evals/${encodeURIComponent(evalId)}`;
 export const compareHref = (baselineId: string, candidateId: string) =>

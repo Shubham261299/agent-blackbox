@@ -49,6 +49,8 @@ CURATED = {
 TOUR_FAULT = "tool_timeout"
 LAB_BASELINE, LAB_RESILIENT = CURATED["failure lab: baseline"], CURATED["failure lab: resilient"]
 BENCH_BASELINE, BENCH_GUIDED = CURATED["benchmark golden-v3: baseline"], CURATED["benchmark golden-v3: guided v2"]
+BENCH_GUIDED_V3 = CURATED["benchmark golden-v3: guided v3"]
+HOLDOUT_BASELINE = CURATED["held-out holdout-v1: baseline"]
 
 
 class ExportError(RuntimeError):
@@ -146,6 +148,10 @@ def tour(reports: dict[str, Any]) -> dict[str, Any]:
         out["fixed"] = [LAB_BASELINE, LAB_RESILIENT]
     if BENCH_BASELINE in reports and BENCH_GUIDED in reports:
         out["regressed"] = [BENCH_BASELINE, BENCH_GUIDED]
+    if BENCH_BASELINE in reports and BENCH_GUIDED_V3 in reports:
+        out["second_attempt"] = [BENCH_BASELINE, BENCH_GUIDED_V3]
+    if HOLDOUT_BASELINE in reports:
+        out["holdout"] = HOLDOUT_BASELINE
     return out
 
 
@@ -168,7 +174,10 @@ def check_files(files: dict[str, Any]) -> None:
     for run_id in (r for r in tour_runs if r):
         if run_id not in run_ids:
             problems.append(f"the tour points at run {run_id}, which is not exported")
-    for pair in (files[MANIFEST]["tour"].get(k) for k in ("fixed", "regressed")):
+    holdout = files[MANIFEST]["tour"].get("holdout")
+    if holdout and holdout not in eval_ids:
+        problems.append(f"the tour points at the evaluation {holdout}, which is not exported")
+    for pair in (files[MANIFEST]["tour"].get(k) for k in ("fixed", "regressed", "second_attempt")):
         if pair and f"{pair[0]}|{pair[1]}" not in files["comparisons/index.json"]["ok"]:
             problems.append(f"the tour points at the comparison {pair[0]} against {pair[1]}, which was not baked")
     for run_id in run_ids:

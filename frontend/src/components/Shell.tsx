@@ -24,19 +24,26 @@ function BrandMark() {
 
 export function Shell({ children, demo, route }: { children: ReactNode; demo: boolean; route: Route }) {
   const [theme, setTheme] = useTheme();
-  const inRuns = route.name === "runs" || route.name === "run";
+  // The live app opens on its run list; the recorded demo opens on a front page and keeps the run list one click away.
+  const inHome = demo && route.name === "home";
+  const inRuns = route.name === "run" || route.name === "runs" || (!demo && route.name === "home");
   const inEvals = route.name === "evals" || route.name === "eval";
   return (
     <div className="shell">
       <header className="topbar">
         <div className="topbar-inner">
-          <a className="brand" href="#/" aria-label="Agent Blackbox, all runs">
+          <a className="brand" href="#/" aria-label={demo ? "Agent Blackbox, front page" : "Agent Blackbox, all runs"}>
             <BrandMark />
             <span className="brand-name">Agent Blackbox</span>
             <span className="brand-tag">Flight recorder for AI agents</span>
           </a>
           <nav className="nav" aria-label="Main">
-            <a href="#/" aria-current={inRuns ? "page" : undefined}>
+            {demo && (
+              <a href="#/" aria-current={inHome ? "page" : undefined}>
+                Overview
+              </a>
+            )}
+            <a href={demo ? "#/runs" : "#/"} aria-current={inRuns ? "page" : undefined}>
               Runs
             </a>
             <a href="#/evals" aria-current={inEvals ? "page" : undefined}>

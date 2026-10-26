@@ -25,7 +25,7 @@
 - Decisions already taken: 24 golden cases (golden-v3 current: golden-v2 with C1/C4 answer patterns widened after triage; v2 stays loadable), option B (only the order id of an address change is verified; keyed digest "option A" is a later extension), judged DeepEval subset of 6 on Day 7, qwen2.5:7b only.
 
 **How to run things (Windows, from the repo root; venv is `.venv`):**
-- Tests: `.venv\Scripts\python -m pytest` (504 backend, 1 needs Jaeger) and `cd frontend; npm test` (167), `npx tsc --noEmit`, `npm run build`.
+- Tests: `.venv\Scripts\python -m pytest` (511 backend, 1 needs Jaeger) and `cd frontend; npm test` (193), `npx tsc --noEmit`, `npm run build`.
 - API: `uvicorn --app-dir backend --factory blackbox.api.main:create_app --port 8000`; UI: `cd frontend; npm run dev` (port 5173). **Ports 8000, 8001 and 8765 are used by other projects on this machine** (check with `Get-NetTCPConnection -LocalPort <p> -State Listen` before starting; never kill a process you did not start). Pick a free port, start the API on it, and point the UI at it: `$env:BLACKBOX_API="http://127.0.0.1:<port>"; npm run dev -- --port 5190 --strictPort`. The Windows venv launcher spawns a child process, so record the listener PID (not just the launcher) to stop it.
 - Jaeger: `docker compose up -d jaeger` (container `jaeger`, UI 16686, restarts with Docker). The whole stack: `docker compose up --build` (dashboard on 8080; ports are movable by `BLACKBOX_*` variables, see docker-compose.yml). Install: `pip install -e .` runs the app, `".[dev]"` adds the tests and Pillow.
 - Evaluations: `python -m blackbox.evals run --mode reference|faults|ollama|faultlab|faultlab-ollama [--variant baseline|resilient|guided|full|guided-v3|full-v3] [--dataset golden-v3|holdout-v1]`; `compare <before> <after>`; `rescore <eval> --dataset golden-v3`. Real-model runs take minutes on CPU.
@@ -118,6 +118,14 @@ Rough target, ordered by what the audience sees first. A day is done only when i
 - [x] Stage 5: `scripts/make_demo_gif.py` (captioned GIF from real screenshots, captions from the data; Pillow as a dev-only extra), `docs/images/demo.gif` in the README, `docs/video-script.md` for the owner's recording; 484 backend tests
 - [x] Stage 6: dependencies split (runtime / `dev` / `judge`), `docker compose up --build` for Jaeger + API + dashboard (run for real under a separate project name), MIT `LICENSE` and `THIRD_PARTY_NOTICES.md` after checking authorship and third-party content, leftover database removed; 504 backend tests
 - **Owner steps to go live:** confirm the licence name and that no employer has a claim; push; enable Pages (Settings, Pages, Source: GitHub Actions); check the CI and deploy workflows pass on GitHub (only rehearsed in containers so far); optionally record the video from `docs/video-script.md`.
+
+## Day 8 — A demo anyone can follow (in progress; plan in [docs/day-8-plain-demo-plan.md](docs/day-8-plain-demo-plan.md))
+- [x] Stage 0: the words, approved 2026-10-26
+- [x] Stage 1: plain-language front page at `#/` (every figure from the stored results), link preview tags and card, run list moved to `#/runs`; 193 frontend and 511 backend tests
+- [ ] Stage 2: guided tour banners and the three ways in
+- [ ] Stage 3: plain-words layer, "In plain words" boxes, technical parts folded away, plain run timeline
+- [ ] Stage 4: jargon and reading-level tests, real-person test
+- [ ] Stage 5: README leads with the plain version; screenshots, GIF, card regenerated; one push
 
 ## Day 7 — Buffer / stretch
 - [ ] DeepEval adapter; ToolCorrectnessMetric cross-check against our own check
