@@ -2,7 +2,7 @@
 
 ## Resume here (read this first in a new chat)
 
-**Status:** Days 0-6 done. Days 0-4 are pushed (`origin/main` = `10ff969`, then Day 5 `b10060b` was pushed by the owner); Day 6 (showcase) is committed locally and not pushed. Day 7 is optional. Push only when the owner says so.
+**Status:** Days 0-6 and 8 are done and pushed (`origin/main` = `cc09802`, the live demo is https://shubham261299.github.io/agent-blackbox/). Day 7 is optional and not started. Waiting on the owner: the test with 2-3 people outside tech (`docs/plain-demo-test.md`); the words they trip on are the next work. **Read CLAUDE.md first.** Push only when the owner says so.
 
 | Day | Topic | Status | Commits (local) |
 |---|---|---|---|
@@ -11,9 +11,10 @@
 | 2 | Dashboard | done, pushed | `a64ee26`, `90af84c`, `b251747` |
 | 3 | Evaluation | done, pushed | `92d7e3a`, `ba26ea0`, `dc67159` |
 | 4 | Failure lab | done, pushed | `1335e6d` backend, `3dc832d` UI, plus the docs commit |
-| 5 | Fix and compare | done, not pushed | `ac2d019`, `2c9e27b`, `0554030`, `0035a2f`, `7d88e71`, `1dc1377`, plus the stage 6 UI commit |
-| 6 | Showcase | done, not pushed | `69a91b3`, `7184c9c`, `fefe05f`, `3ba5ed9`, `122c08f`, `e26194a`, plus the stage 6 commit |
-| 7 | Buffer / stretch | not started | |
+| 5 | Fix and compare | done, pushed | `ac2d019`, `2c9e27b`, `0554030`, `0035a2f`, `7d88e71`, `1dc1377`, plus the stage 6 UI commit |
+| 6 | Showcase | done, pushed | `69a91b3`, `7184c9c`, `fefe05f`, `3ba5ed9`, `122c08f`, `e26194a`, plus the stage 6 commit |
+| 7 | Buffer / stretch (code-level guards, judged subset) | optional, not started | |
+| 8 | A demo anyone can follow (plain-language front page, guided tour, plain-words layer) | done, pushed; people test pending | `31ec521` to `cc09802` |
 
 **Standing rules from the owner (do not break):**
 - Do not commit or push without a go-ahead. Commits are made locally per stage; the owner pushes (or says "push").
@@ -119,7 +120,7 @@ Rough target, ordered by what the audience sees first. A day is done only when i
 - [x] Stage 6: dependencies split (runtime / `dev` / `judge`), `docker compose up --build` for Jaeger + API + dashboard (run for real under a separate project name), MIT `LICENSE` and `THIRD_PARTY_NOTICES.md` after checking authorship and third-party content, leftover database removed; 504 backend tests
 - **Owner steps to go live:** confirm the licence name and that no employer has a claim; push; enable Pages (Settings, Pages, Source: GitHub Actions); check the CI and deploy workflows pass on GitHub (only rehearsed in containers so far); optionally record the video from `docs/video-script.md`.
 
-## Day 8 — A demo anyone can follow (built, committed locally, not pushed; plan in [docs/day-8-plain-demo-plan.md](docs/day-8-plain-demo-plan.md))
+## Day 8 — A demo anyone can follow (done and pushed; plan in [docs/day-8-plain-demo-plan.md](docs/day-8-plain-demo-plan.md))
 - [x] Stage 0: the words, approved 2026-10-26
 - [x] Stage 1: plain-language front page at `#/` (every figure from the stored results), link preview tags and card, run list moved to `#/runs`; 193 frontend and 511 backend tests
 - [x] Stage 2: guided tour (banner with Back / Next on the four stops, entered from the front page); 214 frontend tests
