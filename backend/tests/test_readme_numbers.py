@@ -86,8 +86,18 @@ def test_links_into_the_demo_point_at_runs_and_comparisons_that_exist():
             assert f"{first}|{second}" in ok
 
 
-def test_the_screenshots_the_readme_shows_exist():
-    paths = [p for p in re.findall(r"!\[[^\]]*\]\(([^)]+)\)", README.read_text(encoding="utf-8")) if not p.startswith("http")]
-    assert len(paths) == 4  # the tour GIF and the three screenshots
+def test_the_images_the_readme_shows_exist():
+    text = README.read_text(encoding="utf-8")
+    markdown_images = re.findall(r"!\[[^\]]*\]\(([^)]+)\)", text)
+    html_images = re.findall(r'<img\b[^>]*\bsrc=["\x27]([^"\x27]+)["\x27]', text, flags=re.IGNORECASE)
+    paths = {p for p in markdown_images + html_images if not p.startswith(("http://", "https://"))}
+    # Keep the original evidence visible, while allowing new covers and charts.
+    required = {
+        "docs/images/demo.gif",
+        "docs/images/failed-run.png",
+        "docs/images/fix-that-worked.png",
+        "docs/images/fix-that-did-not.png",
+    }
+    assert required <= paths, required - paths
     for path in paths:
         assert (ROOT / path).is_file(), path
