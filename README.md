@@ -1,20 +1,35 @@
-<div align="center">
-
-<img src=".github/banner.svg" width="100%" alt="Shubham AI Lab, system 09 (Open Source · MIT): Agent run → Recorded trace → Scrub + checks → Where it failed → Fix: better or worse?. Stack: Python, FastAPI, React, Ollama, Docker.">
-
-[🎬 Recorded demo](https://shubham261299.github.io/agent-blackbox/) · [🌐 Portfolio](https://shubham-ai-lab.vercel.app/) · [👤 GitHub profile](https://github.com/Shubham261299) · [💼 LinkedIn](https://www.linkedin.com/in/shubham-jamdar-2571271b3)
-
-</div>
+<img src="docs/images/cover.webp" width="100%" alt="Agent Blackbox cover illustration: a flight recorder, trace ribbon and inspection lens.">
 
 # Agent Blackbox
 
+### Your agent failed. Find out why.
+
+A flight recorder for AI agents. Follow the model and tool calls behind a run, find where it went wrong, and compare whether a fix actually helped.
+
+**[Explore the recorded demo ↗](https://shubham261299.github.io/agent-blackbox/#/)** · [Behind the build](https://shubham-ai-lab.vercel.app/work/agent-blackbox) · [Run locally](#run-it-yourself) · [Results](#results)
+
+**Status: recorded demo available.** No setup needed to explore. The demo replays real recorded runs; it does not execute a live agent.
+
 [![CI](https://github.com/Shubham261299/agent-blackbox/actions/workflows/ci.yml/badge.svg)](https://github.com/Shubham261299/agent-blackbox/actions/workflows/ci.yml)
 
-A flight recorder for AI agents. It records every step an agent takes, checks the recording, shows where a run went wrong, and measures whether a fix made the agent better or worse. It runs on a laptop with a small local model and costs nothing.
+## See it in action
 
-**[Open the recorded demo](https://shubham261299.github.io/agent-blackbox/)** (no install; it replays real recorded runs, nothing in it is live). It opens on a front page in plain language, with a three-minute guided tour. Everything technical is one click away, folded behind "Show technical details".
+[![A captioned tour of a failed run, a successful fix, and a fix that introduced regressions](docs/images/demo.gif)](https://shubham261299.github.io/agent-blackbox/#/)
 
-![A captioned tour of the demo: a failed run, a fix that worked, a fix that did not](docs/images/demo.gif)
+[Prefer a still image? Inspect the failed-run screenshot](docs/images/failed-run.png).
+
+| 01 · Capture | 02 · Inspect | 03 · Compare |
+| --- | --- | --- |
+| Record model and tool calls with timing and errors. | Follow the trace to the step worth investigating first. | Count fixed and broken cases, not just an overall score. |
+
+## Engineering receipt
+
+| Choice | What it means here |
+| --- | --- |
+| Preserve the evidence | Store a scrubbed copy of spans in SQLite alongside results, rather than relying on Jaeger's in-memory storage. |
+| Keep the checks inspectable | Ordinary code evaluates task completion and policy compliance; another model does not decide the verdict. |
+| Report the tradeoff | A plausible instruction rewrite fixed two cases and broke five. Improvements and regressions remain visible together. |
+| Respect the limits | One local model and small evaluation sets demonstrate the method, not general performance. |
 
 ## What this is, in plain words
 
@@ -39,6 +54,10 @@ To test it I built a small customer-support agent (refunds, order lookups, addre
 ![Before and after for the rewritten instructions: 2 cases fixed, 5 broken](docs/images/fix-that-did-not.png)
 
 ## Results
+
+![Recorded results on the same 24 cases: baseline 19 passed, retry 19, instruction rewrite v2 16, v3 17](docs/images/recorded-results.svg)
+
+*One recorded run per variant on golden-v3 with qwen2.5:7b. Counts require task completion and policy compliance; they are not a general benchmark.*
 
 Every number below comes from a stored evaluation (a set of results), and its id is next to it. The recorded demo contains all of them. Model: `qwen2.5:7b` on one laptop CPU, temperature 0, seed 0.
 
@@ -152,3 +171,8 @@ MIT, see [LICENSE](LICENSE). The code, test cases, screenshots and recorded data
 | `docs/` | the plan for each day, written before the work, with results added after |
 | [BRIEF.md](BRIEF.md) | design decisions and what I found each day |
 | [PLAN.md](PLAN.md) | status, checklists, evaluation ids |
+
+
+---
+
+[Explore more of my work →](https://shubham-ai-lab.vercel.app/work) · [GitHub profile](https://github.com/Shubham261299)
